@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/miekg/dns"
-	"github.com/renardev/SpoofDPI-Turkiye/dns/addrselect"
+	"github.com/xvzc/SpoofDPI/dns/addrselect"
 )
 
 type exchangeFunc = func(ctx context.Context, msg *dns.Msg) (*dns.Msg, error)

@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/renardev/SpoofDPI-Turkiye/dns"
-	"github.com/renardev/SpoofDPI-Turkiye/packet"
-	"github.com/renardev/SpoofDPI-Turkiye/proxy/handler"
-	"github.com/renardev/SpoofDPI-Turkiye/util"
-	"github.com/renardev/SpoofDPI-Turkiye/util/log"
+	"github.com/xvzc/SpoofDPI/dns"
+	"github.com/xvzc/SpoofDPI/packet"
+	"github.com/xvzc/SpoofDPI/proxy/handler"
+	"github.com/xvzc/SpoofDPI/util"
+	"github.com/xvzc/SpoofDPI/util/log"
 )
 
 const scopeProxy = "PROXY"

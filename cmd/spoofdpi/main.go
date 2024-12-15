@@ -6,11 +6,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/renardev/SpoofDPI-Turkiye/util/log"
+	"github.com/xvzc/SpoofDPI/util/log"
 
-	"github.com/renardev/SpoofDPI-Turkiye/proxy"
-	"github.com/renardev/SpoofDPI-Turkiye/util"
-	"github.com/renardev/SpoofDPI-Turkiye/version"
+	"github.com/xvzc/SpoofDPI/proxy"
+	"github.com/xvzc/SpoofDPI/util"
+	"github.com/xvzc/SpoofDPI/version"
 )
 
 func main() {
