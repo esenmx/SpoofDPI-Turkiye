@@ -35,8 +35,3 @@ curl -fsSL https://raw.githubusercontent.com/xvzc/SpoofDPI/main/install.sh | bas
 # linux-mipsle
 curl -fsSL https://raw.githubusercontent.com/xvzc/SpoofDPI/main/install.sh | bash -s linux-mipsle
 ```
-
-## Go
-```bash
-go install github.com/xvzc/SpoofDPI/cmd/spoofdpi@latest
-```
