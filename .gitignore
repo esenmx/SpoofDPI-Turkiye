@@ -4,5 +4,7 @@ spoof-dpi.*
 !*/spoof-dpi/
 out/**
 
+/build
+
 .DS_Store
 .idea/
