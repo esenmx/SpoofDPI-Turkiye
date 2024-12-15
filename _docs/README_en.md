@@ -69,6 +69,5 @@ google-chrome --proxy-server="http://127.0.0.1:8080"
  What SpoofDPI does to bypass this is to send the first 1 byte of a request to the server,
  and then send the rest.
 
-# Inspirations
-[Green Tunnel](https://github.com/SadeghHayeri/GreenTunnel) by @SadeghHayeri  
-[GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) by @ValdikSS
+# Similar Projects
+[GoodbyeDPI-Turkey](https://github.com/cagritaskn/GoodbyeDPI-Turkey) @cagritaskn
