@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
-	"github.com/xvzc/SpoofDPI/dns/resolver"
-	"github.com/xvzc/SpoofDPI/util"
-	"github.com/xvzc/SpoofDPI/util/log"
+	"github.com/renardev/SpoofDPI-Turkiye/dns/resolver"
+	"github.com/renardev/SpoofDPI-Turkiye/util"
+	"github.com/renardev/SpoofDPI-Turkiye/util/log"
 )
 
 const scopeDNS = "DNS"

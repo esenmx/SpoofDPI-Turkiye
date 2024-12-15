@@ -1,74 +1,74 @@
 # SpoofDPI
 
-Read in other Languages: [🇬🇧English](https://github.com/xvzc/SpoofDPI), [🇰🇷한국어](https://github.com/xvzc/SpoofDPI/blob/main/_docs/README_ko.md), [🇨🇳简体中文](https://github.com/xvzc/SpoofDPI/blob/main/_docs/README_zh-cn.md), [🇷🇺Русский](https://github.com/xvzc/SpoofDPI/blob/main/_docs/README_ru.md), [🇯🇵日本語](https://github.com/xvzc/SpoofDPI/blob/main/_docs/README_ja.md)
+Read in other Languages: [🇹🇷Turkish](https://github.com/renardev/SpoofDPI-Turkiye), [🇬🇧English](https://github.com/renardev/SpoofDPI-Turkiye/blob/main/_docs/README_en.md)
 
-A simple and fast software designed to bypass **Deep Packet Inspection**.
+Spoof DPI'ın bu sürümü **Türkiye'de** kullanılmak üzere yapılandırılmıştır.
 
 ![image](https://user-images.githubusercontent.com/45588457/148035986-8b0076cc-fefb-48a1-9939-a8d9ab1d6322.png)
 
-# Installation
-See the installation guide for SpoofDPI [here](https://github.com/xvzc/SpoofDPI/blob/main/_docs/INSTALL.md).
+# Kurulum
+Direkt olarak [releases](https://github.com/renardev/SpoofDPI-Turkiye/releases) bölümünden indirebilir veya
+[Buradan](https://github.com/renardev/SpoofDPI-Turkiye/blob/main/_docs/INSTALL.md) kurulum aşamalarını takip edebilirsiniz.
 
-<a href="https://repology.org/project/spoofdpi/versions">
-    <img src="https://repology.org/badge/vertical-allrepos/spoofdpi.svg?columns=1" alt="Packaging status">
-</a>  
+# Kullanım
+Programımız Türkiye'ye özel olarak konfigure edildiği için sizin için uygun sürümü direkt olarak başlatarak çalıştırabilirsiniz.
 
-# Usage
+# Gelişmiş Kullanım
 ```
-Usage: spoofdpi [options...]
+Kullanım: spoofdpi [seçenekler...]
   -addr string
-        listen address (default "127.0.0.1")
+        adresi dinler (varsayılan "127.0.0.1")
   -debug
-        enable debug output
+        hata ayıklamayı aktif edeer
   -dns-addr string
-        dns address (default "8.8.8.8")
+        dns adresi (varsayılan "77.88.8.8")
   -dns-ipv4-only
-        resolve only version 4 addresses
+        sadece sürüm 4 adreslerini dinler
   -dns-port value
-        port number for dns (default 53)
+        dns için port numarası (varsayılan 1253)
   -enable-doh
-        enable 'dns-over-https'
+        'dns-over-https' aktif eder
   -pattern value
-        bypass DPI only on packets matching this regex pattern; can be given multiple times
+        DPI'yı yalnızca bu regex deseniyle eşleşen paketlerde atlar; birden çok kez verilebilir
   -port value
-        port (default 8080)
+        port (varsayılan 8080)
   -silent
-        do not show the banner and server information at start up
+        başlangıçta afişi ve sunucu bilgilerini gösterme
   -system-proxy
-        enable system-wide proxy (default true)
+        sistem genelinde proxy aktif et (varsayılan true)
   -timeout value
-        timeout in milliseconds; no timeout when not given
-  -v    print spoofdpi's version; this may contain some other relevant information
+        milisaniye cinsinden zaman aşımı; verilmediğinde zaman aşımı olmaz
+  -v    spoofdpi'nin sürümünü yazdırır; bu, diğer bazı ilgili bilgileri içerebilir
   -window-size value
-        chunk size, in number of bytes, for fragmented client hello,
-        try lower values if the default value doesn't bypass the DPI;
-        when not given, the client hello packet will be sent in two parts:
-        fragmentation for the first data packet and the rest
+        Parçalanmış istemci dönüşü için bayt sayısı cinsinden yığın boyutu,
+        varsayılan değer DPI'ı atlamazsa daha düşük değerler deneyin;
+        verilmediğinde, istemci dönüş paketi iki parça halinde gönderilecektir:
+        ilk veri paketi için parçalama ve geri kalanı şeklinde
 ```
-> If you are using any vpn extensions such as Hotspot Shield in Chrome browser,
-  go to Settings > Extensions, and disable them.
+> Chrome tarayıcısında Hotspot Shield gibi herhangi bir vpn uzantısı kullanıyorsanız,
+  Ayarlar > Eklentiler, bölümüne gidin ve onları devre dışı bırakın.
 
 ### OSX
-Run `spoofdpi` and it will automatically set your proxy
+`Spoofdpi`ı çalıştırdığınızda proxy'nizi otomatik olarak ayarlayacaktır
 
 ### Linux
-Run `spoofdpi` and open your favorite browser with proxy option
+`Spoofdpi`ı çalıştırın ve favori tarayıcınızı proxy seçeneği ile açın
 ```bash
 google-chrome --proxy-server="http://127.0.0.1:8080"
 ```
 
-# How it works
+# Nasıl Çalışır
 ### HTTP
- Since most websites in the world now support HTTPS, SpoofDPI doesn't bypass Deep Packet Inspections for HTTP requests, However, it still serves proxy connection for all HTTP requests.
+ Dünyadaki çoğu web sitesi artık HTTPS'yi desteklediğinden, SpoofDPI HTTP istekleri için Derin Paket Denetimlerini atlamaz, ancak yine de tüm HTTP istekleri için proxy bağlantısı sunar.
 
 ### HTTPS
- Although TLS encrypts every handshake process, the domain names are still shown as plaintext in the Client hello packet.
- In other words, when someone else looks on the packet, they can easily guess where the packet is headed to.
- The domain name can offer significant information while DPI is being processed, and we can actually see that the connection is blocked right after sending Client hello packet.
- I had tried some ways to bypass this and found out that it seemed like only the first chunk gets inspected when we send the Client hello packet split into chunks.
- What SpoofDPI does to bypass this is to send the first 1 byte of a request to the server,
- and then send the rest.
+ TLS her handshake işlemini şifrelese de, İstemci dönüş paketinde alan adları hala düz metin olarak gösterilir.
+ Başka bir deyişle, başka biri pakete baktığında, paketin nereye gittiğini kolayca tahmin edebilir.
+ DPI işlenirken alan adı önemli bilgiler sunabilir ve aslında İstemci dönüş paketini gönderdikten hemen sonra bağlantının engellendiğini görebiliriz.
+ Bunu aşmak için bazı yollar denedim ve İstemci dönüş paketini parçalara bölerek gönderdiğimizde yalnızca ilk parçanın denetlendiğini fark ettim.
+ SpoofDPI'ın bunu atlamak için yaptığı şey, bir isteğin ilk 1 baytını sunucuya göndermektir,
+ ve sonra geri kalanını gönder.
 
-# Inspirations
-[Green Tunnel](https://github.com/SadeghHayeri/GreenTunnel) by @SadeghHayeri  
-[GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) by @ValdikSS
+
+# Benzer Projeler
+[GoodbyeDPI-Turkey](https://github.com/cagritaskn/GoodbyeDPI-Turkey) @cagritaskn

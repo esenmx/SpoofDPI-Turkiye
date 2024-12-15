@@ -69,5 +69,6 @@ func PrintColoredBanner() {
 		{Level: 0, Text: "DEBUG   : " + fmt.Sprint(config.Debug)},
 	}).Render()
 
-	pterm.DefaultBasicText.Println("Press 'CTRL + c' to quit")
+	pterm.DefaultBasicText.Println("Spoof DPI'ın bu sürümü Türkiye'de kullanılmak üzere yapılandırılmıştır.")
+	pterm.DefaultBasicText.Println("Çıkmak için 'CTRL + c' tuş kombinasyonunu kullanın.")
 }

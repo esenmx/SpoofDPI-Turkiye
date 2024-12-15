@@ -7,6 +7,6 @@ var VERSION string
 
 func PrintVersion() {
 	println("spoofdpi", "v" + VERSION)
-	println("A simple and fast anti-censorship tool written in Go.")
-	println("https://github.com/xvzc/SpoofDPI")
+	println("Spoof DPI'ın bu sürümü Türkiye'de kullanılmak üzere yapılandırılmıştır.")
+	println("https://github.com/renardev/SpoofDPI-Turkiye")
 }

@@ -14,12 +14,12 @@ const (
 		" `(route -n get default | grep 'interface' || route -n get -inet6 default | grep 'interface') | cut -d ':' -f2`" +
 		" -B 1 | head -n 1 | cut -d ' ' -f 2-"
 	darwinOS                     = "darwin"
-	permissionErrorHelpTextMacOS = "By default SpoofDPI tries to set itself up as a system-wide proxy server.\n" +
-		"Doing so may require root access on machines with\n" +
-		"'Settings > Privacy & Security > Advanced > Require" +
-		" an administrator password to access system-wide settings' enabled.\n" +
-		"If you do not want SpoofDPI to act as a system-wide proxy, provide" +
-		" -system-proxy=false."
+	permissionErrorHelpTextMacOS = "Varsayılan olarak SpoofDPI kendisini sistem genelinde bir proxy sunucusu olarak ayarlamaya çalışır.\n" +
+		"Bu işlem kök (root) erişimine ihtiyaç duyabilir:\n" +
+		"'Settings > Privacy & Security > Advanced > Require\n" +
+		" Bir yetkili şifresi girmeniz istenecektir.\n" +
+		"SpoofDPI'ın sistem genelinde bir proxy olarak hareket etmesini istemiyorsanız" +
+		" -system-proxy=false ayarlayınız."
 )
 
 func SetOsProxy(port uint16) error {

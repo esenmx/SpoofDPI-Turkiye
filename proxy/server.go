@@ -7,8 +7,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/xvzc/SpoofDPI/util"
-	"github.com/xvzc/SpoofDPI/util/log"
+	"github.com/renardev/SpoofDPI-Turkiye/util"
+	"github.com/renardev/SpoofDPI-Turkiye/util/log"
 )
 
 const (
