@@ -4,7 +4,6 @@
 
 <!--ts-->
    * [Binary](#binary)
-   * [Go](#go)
 <!--te-->
 
 ## Binary
