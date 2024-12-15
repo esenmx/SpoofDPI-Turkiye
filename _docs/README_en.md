@@ -1,4 +1,4 @@
-# SpoofDPI
+# SpoofDPI Turkiye
 
 Read in other Languages: [🇹🇷Turkish](https://github.com/renardev/SpoofDPI-Turkiye), [🇬🇧English](https://github.com/renardev/SpoofDPI-Turkiye/blob/main/_docs/README_en.md)
 

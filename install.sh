@@ -1,9 +1,9 @@
 #!/bin/bash
 
-curl "https://api.github.com/repos/xvzc/SpoofDPI/releases/latest" |
+curl "https://api.github.com/repos/renardev/SpoofDPI-Turkiye/releases/latest" |
     grep '"tag_name":' |
     sed -E 's/.*"([^"]+)".*/\1/' |
-    xargs -I {} curl -OL "https://github.com/xvzc/SpoofDPI/releases/download/"\{\}"/spoofdpi-${1}.tar.gz"
+    xargs -I {} curl -OL "https://github.com/renardev/SpoofDPI-Turkiye/releases/download/"\{\}"/spoofdpi-${1}.tar.gz"
 
 mkdir -p ~/.spoofdpi/bin
 
@@ -19,7 +19,7 @@ fi
 export PATH=$PATH:~/.spoofdpi/bin
 
 echo ""
-echo "Successfully installed SpoofDPI."
-echo "Please add the line below to your rcfile(.bashrc or .zshrc etc..)"
+echo "SpoofDPI-Turkiye başarıyla indirildi."
+echo "Lütfen rcfile(.bashrc or .zshrc etc..) dosyanızın altına şunu ekleyin:"
 echo ""
 echo ">>    export PATH=\$PATH:~/.spoofdpi/bin"
