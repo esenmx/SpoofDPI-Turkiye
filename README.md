@@ -71,4 +71,4 @@ google-chrome --proxy-server="http://127.0.0.1:8080"
 
 
 # Benzer Projeler
-[GoodbyeDPI-Turkey](https://github.com/cagritaskn/GoodbyeDPI-Turkey) @cagritaskn
+[GoodbyeDPI-Turkey](https://github.com/cagritaskn/GoodbyeDPI-Turkey) @cagritaskn (Windows)
