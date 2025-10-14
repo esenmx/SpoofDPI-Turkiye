@@ -46,22 +46,13 @@ func main() {
 
 	go pxy.Start(context.Background())
 
-	// Handle signals
 	sigs := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-
 	signal.Notify(
 		sigs,
-		syscall.SIGKILL,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
-		syscall.SIGHUP)
-
-	go func() {
-		_ = <-sigs
-		done <- true
-	}()
-
-	<-done
+		syscall.SIGHUP,
+	)
+	<-sigs
 }
