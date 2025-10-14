@@ -5,9 +5,9 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/xvzc/SpoofDPI/packet"
-	"github.com/xvzc/SpoofDPI/util"
-	"github.com/xvzc/SpoofDPI/util/log"
+	"github.com/esenmx/SpoofDPI/packet"
+	"github.com/esenmx/SpoofDPI/util"
+	"github.com/esenmx/SpoofDPI/util/log"
 )
 
 type HttpHandler struct {
@@ -109,7 +109,7 @@ func (h *HttpHandler) deliverResponse(ctx context.Context, from *net.TCPConn, to
 			logger.Debug().Msgf("error while setting connection deadline for %s: %s", fd, err)
 		}
 
-		bytesRead, err := ReadBytes(ctx, from, buf)
+		bytesRead, err := ReadBytes(from, buf)
 		if err != nil {
 			logger.Debug().Msgf("error reading from %s: %s", fd, err)
 			return
