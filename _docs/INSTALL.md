@@ -3,15 +3,18 @@
 ## Table of Contents
 
 <!--ts-->
-   * [Binary](#binary)
+* [Binary](#binary)
 <!--te-->
 
 ## Binary
+
 SpoofDPI will be installed in `~/.spoofdpi/bin`.  
 To run SpoofDPI in any directory, add the line below to your `~/.bashrc || ~/.zshrc || ...`
+
 ```bash
 export PATH=$PATH:~/.spoofdpi/bin
 ```
+
 ```bash
 # macOS Intel
 curl -fsSL https://raw.githubusercontent.com/renardev/SpoofDPI-Turkiye/main/install.sh | bash -s darwin-amd64
