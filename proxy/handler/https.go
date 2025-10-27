@@ -2,9 +2,11 @@ package handler
 
 import (
 	"context"
+	"io"
 	"net"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/esenmx/SpoofDPI/packet"
 	"github.com/esenmx/SpoofDPI/util"
@@ -23,7 +25,7 @@ type HttpsHandler struct {
 
 func NewHttpsHandler(timeout int, windowSize int, allowedPatterns []*regexp.Regexp, exploit bool) *HttpsHandler {
 	return &HttpsHandler{
-		bufferSize:      1024,
+		bufferSize:      64 * 1024, // 64KB buffer for optimal throughput
 		protocol:        "HTTPS",
 		port:            443,
 		timeout:         timeout,
@@ -52,6 +54,10 @@ func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, initPkt *p
 		logger.Debug().Msgf("%s", err)
 		return
 	}
+
+	// Configure TCP for optimal performance
+	ConfigureTCP(rConn)
+	ConfigureTCP(lConn)
 
 	logger.Debug().Msgf("new connection to the server %s -> %s", rConn.LocalAddr(), initPkt.Domain())
 
@@ -104,23 +110,18 @@ func (h *HttpsHandler) communicate(ctx context.Context, from *net.TCPConn, to *n
 		logger.Debug().Msgf("closing proxy connection: %s -> %s", fd, td)
 	}()
 
+	// Set read deadline once for the entire connection if timeout is set
+	if h.timeout > 0 {
+		deadline := time.Now().Add(time.Millisecond * time.Duration(h.timeout))
+		from.SetReadDeadline(deadline)
+	}
+
+	// Use io.CopyBuffer for optimal performance with large buffer
 	buf := make([]byte, h.bufferSize)
-	for {
-		err := setConnectionTimeout(from, h.timeout)
-		if err != nil {
-			logger.Debug().Msgf("error while setting connection deadline for %s: %s", fd, err)
-		}
+	_, err := io.CopyBuffer(to, from, buf)
 
-		bytesRead, err := ReadBytes(from, buf)
-		if err != nil {
-			logger.Debug().Msgf("error reading from %s: %s", fd, err)
-			return
-		}
-
-		if _, err := to.Write(bytesRead); err != nil {
-			logger.Debug().Msgf("error writing to %s", td)
-			return
-		}
+	if err != nil && err != io.EOF {
+		logger.Debug().Msgf("error in copy: %s -> %s: %s", fd, td, err)
 	}
 }
 
