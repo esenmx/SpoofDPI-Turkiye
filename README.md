@@ -6,15 +6,18 @@ Spoof DPI'ın bu sürümü **Türkiye'de** kullanılmak üzere yapılandırılm�
 
 ![image](https://user-images.githubusercontent.com/45588457/148035986-8b0076cc-fefb-48a1-9939-a8d9ab1d6322.png)
 
-# Kurulum
+## Kurulum
+
 Direkt olarak [releases](https://github.com/renardev/SpoofDPI-Turkiye/releases) bölümünden indirebilir veya
 [Buradan](https://github.com/renardev/SpoofDPI-Turkiye/blob/main/_docs/INSTALL.md) kurulum aşamalarını takip edebilirsiniz.
 
-# Kullanım
+## Kullanım
+
 Programımız Türkiye'ye özel olarak konfigure edildiği için sizin için uygun sürümü direkt olarak başlatarak çalıştırabilirsiniz.
 
-# Gelişmiş Kullanım
-```
+### Gelişmiş Kullanım
+
+```text
 Kullanım: spoofdpi [seçenekler...]
   -addr string
         adresi dinler (varsayılan "127.0.0.1")
@@ -45,23 +48,30 @@ Kullanım: spoofdpi [seçenekler...]
         verilmediğinde, istemci dönüş paketi iki parça halinde gönderilecektir:
         ilk veri paketi için parçalama ve geri kalanı şeklinde
 ```
+
 > Chrome tarayıcısında Hotspot Shield gibi herhangi bir vpn uzantısı kullanıyorsanız,
   Ayarlar > Eklentiler, bölümüne gidin ve onları devre dışı bırakın.
 
 ### OSX
+
 `Spoofdpi`ı çalıştırdığınızda proxy'nizi otomatik olarak ayarlayacaktır
 
 ### Linux
+
 `Spoofdpi`ı çalıştırın ve favori tarayıcınızı proxy seçeneği ile açın
+
 ```bash
 google-chrome --proxy-server="http://127.0.0.1:8080"
 ```
 
-# Nasıl Çalışır
+## Nasıl Çalışır
+
 ### HTTP
+
  Dünyadaki çoğu web sitesi artık HTTPS'yi desteklediğinden, SpoofDPI HTTP istekleri için Derin Paket Denetimlerini atlamaz, ancak yine de tüm HTTP istekleri için proxy bağlantısı sunar.
 
 ### HTTPS
+
  TLS her handshake işlemini şifrelese de, İstemci dönüş paketinde alan adları hala düz metin olarak gösterilir.
  Başka bir deyişle, başka biri pakete baktığında, paketin nereye gittiğini kolayca tahmin edebilir.
  DPI işlenirken alan adı önemli bilgiler sunabilir ve aslında İstemci dönüş paketini gönderdikten hemen sonra bağlantının engellendiğini görebiliriz.
@@ -69,6 +79,6 @@ google-chrome --proxy-server="http://127.0.0.1:8080"
  SpoofDPI'ın bunu atlamak için yaptığı şey, bir isteğin ilk 1 baytını sunucuya göndermektir,
  ve sonra geri kalanını gönder.
 
+## Benzer Projeler
 
-# Benzer Projeler
 [GoodbyeDPI-Turkey](https://github.com/cagritaskn/GoodbyeDPI-Turkey) @cagritaskn (Windows)
