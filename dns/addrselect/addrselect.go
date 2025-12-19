@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/netip"
 	"sort"
+	"strings"
 )
 
 // Copyright 2015 The Go Authors. All rights reserved.
@@ -12,6 +13,9 @@ import (
 
 // Minimal RFC 6724 address selection.
 
+// srcAddrs is a variable to allow mocking in tests.
+var srcAddrs = defaultSrcAddrs
+
 func SortByRFC6724(addrs []net.IPAddr) {
 	if len(addrs) < 2 {
 		return
@@ -19,7 +23,7 @@ func SortByRFC6724(addrs []net.IPAddr) {
 	sortByRFC6724withSrcs(addrs, srcAddrs(addrs))
 }
 
-func sortByRFC6724withSrcs(addrs []net.IPAddr, srcs []netip.Addr) {
+func sortByRFC6724withSrcs(addrs []net.IPAddr, srcs []srcInfo) {
 	if len(addrs) != len(srcs) {
 		panic("internal error")
 	}
@@ -28,7 +32,8 @@ func sortByRFC6724withSrcs(addrs []net.IPAddr, srcs []netip.Addr) {
 	for i, v := range addrs {
 		addrAttrIP, _ := netip.AddrFromSlice(v.IP)
 		addrAttr[i] = ipAttrOf(addrAttrIP)
-		srcAttr[i] = ipAttrOf(srcs[i])
+		srcAttr[i] = ipAttrOf(srcs[i].Addr)
+		srcAttr[i].IsNative = srcs[i].IsNative
 	}
 	sort.Stable(&byRFC6724{
 		addrs:    addrs,
@@ -38,19 +43,58 @@ func sortByRFC6724withSrcs(addrs []net.IPAddr, srcs []netip.Addr) {
 	})
 }
 
-// srcAddrs tries to UDP-connect to each address to see if it has a
-// route. (This doesn't send any packets). The destination port
-// number is irrelevant.
-func srcAddrs(addrs []net.IPAddr) []netip.Addr {
-	srcs := make([]netip.Addr, len(addrs))
+type srcInfo struct {
+	Addr     netip.Addr
+	IsNative bool
+}
+
+// defaultSrcAddrs tries to UDP-connect to each address to see if it has a
+// route. It also determines if the source interface is "native" (not a tunnel).
+func defaultSrcAddrs(addrs []net.IPAddr) []srcInfo {
+	srcs := make([]srcInfo, len(addrs))
 	dst := net.UDPAddr{Port: 9}
+
+	// Cache interface lookup by IP
+	var ipToIface map[netip.Addr]*net.Interface
+	initInterfaces := func() {
+		if ipToIface != nil {
+			return
+		}
+		ipToIface = make(map[netip.Addr]*net.Interface)
+		ifaces, _ := net.Interfaces()
+		for i := range ifaces {
+			iface := &ifaces[i]
+			addrs, _ := iface.Addrs()
+			for _, a := range addrs {
+				if ipnet, ok := a.(*net.IPNet); ok {
+					if addr, ok := netip.AddrFromSlice(ipnet.IP); ok {
+						ipToIface[addr.Unmap()] = iface
+					}
+				}
+			}
+		}
+	}
+
 	for i := range addrs {
 		dst.IP = addrs[i].IP
 		dst.Zone = addrs[i].Zone
 		c, err := net.DialUDP("udp", nil, &dst)
 		if err == nil {
 			if src, ok := c.LocalAddr().(*net.UDPAddr); ok {
-				srcs[i], _ = netip.AddrFromSlice(src.IP)
+				if addr, ok := netip.AddrFromSlice(src.IP); ok {
+					addr = addr.Unmap()
+					srcs[i].Addr = addr
+
+					// Determine if native
+					initInterfaces()
+					if iface, found := ipToIface[addr]; found {
+						srcs[i].IsNative = isNative(iface)
+					} else {
+						// If interface not found, assume native?
+						// Or safe default.
+						srcs[i].IsNative = true
+					}
+				}
 			}
 			c.Close()
 		}
@@ -58,10 +102,37 @@ func srcAddrs(addrs []net.IPAddr) []netip.Addr {
 	return srcs
 }
 
+func isNative(iface *net.Interface) bool {
+	if iface == nil {
+		return true
+	}
+	// Tunnels are often Point-to-Point.
+	// Note: Some native links (like PPPoE) are also P2P, but for the purpose
+	// of avoiding encapsulated tunnels (like 6in4, GRE), this flag is a strong hint.
+	// However, RFC 6724 distinguishes "native" from "encapsulating transition mechanisms".
+	// Many tunnels (tun, sit) are P2P.
+	if iface.Flags&net.FlagPointToPoint != 0 {
+		return false
+	}
+
+	name := iface.Name
+	// Check common tunnel naming conventions
+	if strings.HasPrefix(name, "tun") ||
+		strings.HasPrefix(name, "tap") ||
+		strings.HasPrefix(name, "sit") ||
+		strings.HasPrefix(name, "ip6tnl") ||
+		strings.HasPrefix(name, "he-ipv6") {
+		return false
+	}
+
+	return true
+}
+
 type ipAttr struct {
 	Scope      scope
 	Precedence uint8
 	Label      uint8
+	IsNative   bool
 }
 
 func ipAttrOf(ip netip.Addr) ipAttr {
@@ -79,7 +150,7 @@ func ipAttrOf(ip netip.Addr) ipAttr {
 type byRFC6724 struct {
 	addrs    []net.IPAddr // addrs to sort
 	addrAttr []ipAttr
-	srcs     []netip.Addr // or not valid addr if unreachable
+	srcs     []srcInfo // or not valid addr if unreachable
 	srcAttr  []ipAttr
 }
 
@@ -99,8 +170,8 @@ func (s *byRFC6724) Swap(i, j int) {
 func (s *byRFC6724) Less(i, j int) bool {
 	DA := s.addrs[i].IP
 	DB := s.addrs[j].IP
-	SourceDA := s.srcs[i]
-	SourceDB := s.srcs[j]
+	SourceDA := s.srcs[i].Addr
+	SourceDB := s.srcs[j].Addr
 	attrDA := &s.addrAttr[i]
 	attrDB := &s.addrAttr[j]
 	attrSourceDA := &s.srcAttr[i]
@@ -176,8 +247,12 @@ func (s *byRFC6724) Less(i, j int) bool {
 	// If DA is reached via an encapsulating transition mechanism (e.g.,
 	// IPv6 in IPv4) and DB is not, then prefer DB.  Similarly, if DB is
 	// reached via encapsulation and DA is not, then prefer DA.
-
-	// TODO(bradfitz): implement? low priority for now.
+	if attrSourceDA.IsNative && !attrSourceDB.IsNative {
+		return preferDA
+	}
+	if !attrSourceDA.IsNative && attrSourceDB.IsNative {
+		return preferDB
+	}
 
 	// Rule 8: Prefer smaller scope.
 	// If Scope(DA) < Scope(DB), then prefer DA.  Similarly, if Scope(DA) >
