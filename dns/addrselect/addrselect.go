@@ -34,6 +34,7 @@ func sortByRFC6724withSrcs(addrs []net.IPAddr, srcs []srcInfo) {
 		addrAttr[i] = ipAttrOf(addrAttrIP)
 		srcAttr[i] = ipAttrOf(srcs[i].Addr)
 		srcAttr[i].IsNative = srcs[i].IsNative
+		srcAttr[i].IsDeprecated = srcs[i].IsDeprecated
 	}
 	sort.Stable(&byRFC6724{
 		addrs:    addrs,
@@ -44,8 +45,9 @@ func sortByRFC6724withSrcs(addrs []net.IPAddr, srcs []srcInfo) {
 }
 
 type srcInfo struct {
-	Addr     netip.Addr
-	IsNative bool
+	Addr         netip.Addr
+	IsNative     bool
+	IsDeprecated bool
 }
 
 // defaultSrcAddrs tries to UDP-connect to each address to see if it has a
@@ -56,6 +58,7 @@ func defaultSrcAddrs(addrs []net.IPAddr) []srcInfo {
 
 	// Cache interface lookup by IP
 	var ipToIface map[netip.Addr]*net.Interface
+	deprecated := getDeprecatedAddrs()
 	initInterfaces := func() {
 		if ipToIface != nil {
 			return
@@ -94,6 +97,9 @@ func defaultSrcAddrs(addrs []net.IPAddr) []srcInfo {
 						// Or safe default.
 						srcs[i].IsNative = true
 					}
+					if deprecated != nil {
+						srcs[i].IsDeprecated = deprecated[addr]
+					}
 				}
 			}
 			c.Close()
@@ -129,10 +135,11 @@ func isNative(iface *net.Interface) bool {
 }
 
 type ipAttr struct {
-	Scope      scope
-	Precedence uint8
-	Label      uint8
-	IsNative   bool
+	Scope        scope
+	Precedence   uint8
+	Label        uint8
+	IsNative     bool
+	IsDeprecated bool
 }
 
 func ipAttrOf(ip netip.Addr) ipAttr {
@@ -209,8 +216,12 @@ func (s *byRFC6724) Less(i, j int) bool {
 	// If Source(DA) is deprecated and Source(DB) is not, then prefer DB.
 	// Similarly, if Source(DA) is not deprecated and Source(DB) is
 	// deprecated, then prefer DA.
-
-	// TODO(bradfitz): implement? low priority for now.
+	if attrSourceDA.IsDeprecated && !attrSourceDB.IsDeprecated {
+		return preferDB
+	}
+	if !attrSourceDA.IsDeprecated && attrSourceDB.IsDeprecated {
+		return preferDA
+	}
 
 	// Rule 4: Prefer home addresses.
 	// If Source(DA) is simultaneously a home address and care-of address
