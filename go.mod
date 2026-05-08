@@ -1,8 +1,6 @@
 module github.com/esenmx/SpoofDPI-Turkiye
 
-go 1.25.0
-
-toolchain go1.26.3
+go 1.26.3
 
 require (
 	github.com/miekg/dns v1.1.72

@@ -41,6 +41,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.6.0
+          install-mode: goinstall
 
   build:
     name: build (${{ matrix.goos }}/${{ matrix.goarch }})
