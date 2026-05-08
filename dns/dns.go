@@ -61,10 +61,12 @@ func NewDns(config *util.Config) *Dns {
 		chain = append(chain, resolver.NewDOHResolver(config.DohUrl, config.DohBootstrapIp))
 	}
 
-	// system as last-ditch fallback so a fully misconfigured chain still
-	// resolves names that the host's own resolver can answer.
-	chain = append(chain, resolver.NewSystemResolver())
-
+	// IMPORTANT: do NOT add the system resolver to this chain. ChainResolver
+	// races every entry in parallel and returns the fastest non-empty answer.
+	// On Turkish ISPs the local system resolver is the closest hop and would
+	// win the race for blocked domains with the ISP's poisoned IP, defeating
+	// the entire bypass. The system resolver is used only on the
+	// useSystemDns=true branch (non-bypass traffic) below.
 	bypass := resolver.NewChainResolver(chain, 1500*time.Millisecond)
 	cached := resolver.NewCache(bypass, 5*time.Minute, 10*time.Second, 4096)
 

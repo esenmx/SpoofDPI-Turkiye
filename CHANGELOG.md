@@ -33,6 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Per-connection bidirectional copy uses TCP half-close so an EOF in one direction no longer truncates an in-flight response in the other.
 
 ### Fixed
+- **(hotfix) Forbidden websites no longer load:** the bypass DNS chain raced the system resolver in parallel and returned its answer first, but on Turkish ISPs the system resolver is poisoned. The chunked-ClientHello bypass then dialed the ISP's blocked-page IP and the page never loaded. The bypass chain now contains only the configured upstreams (`-dns-addr`, `-dns-fallback`, DoH); the system resolver is still used for the `useSystemDns=true` (no-pattern-match) path, exactly as before.
+- **(hotfix) CI lint job:** golangci-lint v1.62 ships compiled against Go 1.23 and refuses configs targeting Go 1.26.3. Bumped to `v2.6.0` via `golangci/golangci-lint-action@v8` and migrated `.golangci.yaml` to the v2 schema.
 - `Client.Exchange` was used instead of `ExchangeContext`, so per-call DNS timeouts were silently ignored. Caller `context.WithTimeout` is now honored.
 - `writeChunks` returned `(0, nil)` on Write failures, which left bidirectional goroutines stuck waiting for data that never arrived. The real error is now wrapped and surfaced.
 - `net.DialTCP` had no timeout; routes black-holed by ISPs hung tabs for ~75 seconds. Now uses `net.Dialer{Timeout: 10s}.DialContext`.
