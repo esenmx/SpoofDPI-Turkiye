@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"runtime"
 	"strconv"
 	"unsafe"
 )
@@ -51,7 +52,7 @@ func ParseArgs() *Args {
 	flag.StringVar(&args.DohBootstrapIp, "doh-bootstrap-ip", "1.1.1.1", "IP to dial for the DoH endpoint, bypassing the system resolver (set empty to use the system resolver)")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Silent, "silent", false, "do not show the banner and server information at start up")
-	flag.BoolVar(&args.SystemProxy, "system-proxy", true, "enable system-wide proxy (macOS only; ignored elsewhere)")
+	flag.BoolVar(&args.SystemProxy, "system-proxy", runtime.GOOS == "darwin", "enable system-wide proxy (macOS only; defaults to false on other platforms)")
 	uintNVar(&args.Timeout, "timeout", 0, "timeout in milliseconds; no timeout when not given")
 	uintNVar(&args.WindowSize, "window-size", 5, `chunk size, in number of bytes, for fragmented client hello,
 try lower values if the default value doesn't bypass the DPI;
