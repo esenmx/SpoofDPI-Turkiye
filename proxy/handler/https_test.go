@@ -10,14 +10,6 @@ import (
 	"time"
 )
 
-func collect(seq func(yield func([]byte) bool)) [][]byte {
-	var out [][]byte
-	for c := range seq {
-		out = append(out, c)
-	}
-	return out
-}
-
 func TestSplitInChunksEvenSplit(t *testing.T) {
 	chunks := slices.Collect(splitInChunks([]byte("ABCDEFGH"), 2))
 	if len(chunks) != 4 {
