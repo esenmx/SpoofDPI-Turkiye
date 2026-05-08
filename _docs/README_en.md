@@ -1,6 +1,6 @@
 # SpoofDPI Turkiye
 
-Read in other Languages: [🇹🇷Turkish](https://github.com/renardev/SpoofDPI-Turkiye), [🇬🇧English](https://github.com/renardev/SpoofDPI-Turkiye/blob/main/_docs/README_en.md)
+Read in other Languages: [🇹🇷Turkish](https://github.com/esenmx/SpoofDPI-Turkiye), [🇬🇧English](https://github.com/esenmx/SpoofDPI-Turkiye/blob/main/_docs/README_en.md)
 
 This version of Spoof DPI is configured for use **in Turkiye.**
 
@@ -8,8 +8,8 @@ This version of Spoof DPI is configured for use **in Turkiye.**
 
 ## Installation
 
-You can download directly from the [releases](https://github.com/renardev/SpoofDPI-Turkiye/releases) section or
-See the installation guide for SpoofDPI [here](https://github.com/renardev/SpoofDPI-Turkiye/blob/main/_docs/INSTALL.md).
+You can download directly from the [releases](https://github.com/esenmx/SpoofDPI-Turkiye/releases) section or
+See the installation guide for SpoofDPI [here](https://github.com/esenmx/SpoofDPI-Turkiye/blob/main/_docs/INSTALL.md).
 
 ## Usage
 

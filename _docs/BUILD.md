@@ -4,11 +4,11 @@ Although pre-built binaries are available for multiple platforms, you can also b
 
 ## Prerequisites
 
-1. Ensure you've installed go version `1.21`
+1. Ensure you've installed Go matching `go.mod` (currently `1.24`).
 2. Clone this repository to a location of your choice.
 
 ## Build
 
 ```bash
-CGO_ENABLED=0 go build -ldflags="-w -s" ./cmd/...
+CGO_ENABLED=0 go build -trimpath -ldflags="-w -s" -o spoofdpi .
 ```
