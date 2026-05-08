@@ -2,32 +2,39 @@ package handler
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net"
 	"regexp"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/esenmx/SpoofDPI/packet"
 	"github.com/esenmx/SpoofDPI/util"
 	"github.com/esenmx/SpoofDPI/util/log"
 )
 
+const (
+	httpsDialTimeout = 10 * time.Second
+)
+
 type HttpsHandler struct {
 	bufferSize      int
 	protocol        string
-	port            int
 	timeout         int
-	windowsize      int
+	windowSize      int
 	exploit         bool
 	allowedPatterns []*regexp.Regexp
 }
 
 func NewHttpsHandler(timeout int, windowSize int, allowedPatterns []*regexp.Regexp, exploit bool) *HttpsHandler {
 	return &HttpsHandler{
-		bufferSize:      1024,
+		bufferSize:      4 * 1024,
 		protocol:        "HTTPS",
-		port:            443,
 		timeout:         timeout,
-		windowsize:      windowSize,
+		windowSize:      windowSize,
 		allowedPatterns: allowedPatterns,
 		exploit:         exploit,
 	}
@@ -37,141 +44,166 @@ func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, initPkt *p
 	ctx = util.GetCtxWithScope(ctx, h.protocol)
 	logger := log.GetCtxLogger(ctx)
 
-	// Create a connection to the requested server
-	var err error
+	port := 443
 	if initPkt.Port() != "" {
-		h.port, err = strconv.Atoi(initPkt.Port())
-		if err != nil {
-			logger.Debug().Msgf("error parsing port for %s aborting..", initPkt.Domain())
+		parsed, err := strconv.Atoi(initPkt.Port())
+		if err != nil || parsed <= 0 || parsed > 65535 {
+			logger.Debug().Msgf("invalid port %q for %s, aborting", initPkt.Port(), initPkt.Domain())
+			lConn.Close()
+			return
 		}
+		port = parsed
 	}
 
-	rConn, err := net.DialTCP("tcp", nil, &net.TCPAddr{IP: net.ParseIP(ip), Port: h.port})
+	rConn, err := dialTCP(ctx, ip, port)
 	if err != nil {
+		logger.Debug().Msgf("dial %s:%d: %s", ip, port, err)
 		lConn.Close()
-		logger.Debug().Msgf("%s", err)
 		return
 	}
 
 	logger.Debug().Msgf("new connection to the server %s -> %s", rConn.LocalAddr(), initPkt.Domain())
 
-	_, err = lConn.Write([]byte(initPkt.Version() + " 200 Connection Established\r\n\r\n"))
-	if err != nil {
-		logger.Debug().Msgf("error sending 200 connection established to the client: %s", err)
+	if _, err := lConn.Write([]byte(initPkt.Version() + " 200 Connection Established\r\n\r\n")); err != nil {
+		logger.Debug().Msgf("error sending 200 to client: %s", err)
+		lConn.Close()
+		rConn.Close()
 		return
 	}
 
-	logger.Debug().Msgf("sent connection established to %s", lConn.RemoteAddr())
-
-	// Read client hello
 	m, err := packet.ReadTLSMessage(lConn)
 	if err != nil || !m.IsClientHello() {
-		logger.Debug().Msgf("error reading client hello from %s: %s", lConn.RemoteAddr().String(), err)
+		logger.Debug().Msgf("error reading client hello from %s: %v", lConn.RemoteAddr(), err)
+		lConn.Close()
+		rConn.Close()
 		return
 	}
 	clientHello := m.Raw
 
 	logger.Debug().Msgf("client sent hello %d bytes", len(clientHello))
 
-	// Generate a go routine that reads from the server
-	go h.communicate(ctx, rConn, lConn, initPkt.Domain(), lConn.RemoteAddr().String())
-	go h.communicate(ctx, lConn, rConn, lConn.RemoteAddr().String(), initPkt.Domain())
-
 	if h.exploit {
 		logger.Debug().Msgf("writing chunked client hello to %s", initPkt.Domain())
-		chunks := splitInChunks(ctx, clientHello, h.windowsize)
+		chunks := splitInChunks(ctx, clientHello, h.windowSize)
 		if _, err := writeChunks(rConn, chunks); err != nil {
 			logger.Debug().Msgf("error writing chunked client hello to %s: %s", initPkt.Domain(), err)
+			lConn.Close()
+			rConn.Close()
 			return
 		}
 	} else {
 		logger.Debug().Msgf("writing plain client hello to %s", initPkt.Domain())
 		if _, err := rConn.Write(clientHello); err != nil {
 			logger.Debug().Msgf("error writing plain client hello to %s: %s", initPkt.Domain(), err)
+			lConn.Close()
+			rConn.Close()
 			return
 		}
 	}
+
+	pipe(ctx, lConn, rConn, h.bufferSize, h.timeout, initPkt.Domain())
 }
 
-func (h *HttpsHandler) communicate(ctx context.Context, from *net.TCPConn, to *net.TCPConn, fd string, td string) {
-	ctx = util.GetCtxWithScope(ctx, h.protocol)
+func splitInChunks(ctx context.Context, raw []byte, size int) [][]byte {
 	logger := log.GetCtxLogger(ctx)
-
-	defer func() {
-		from.Close()
-		to.Close()
-
-		logger.Debug().Msgf("closing proxy connection: %s -> %s", fd, td)
-	}()
-
-	buf := make([]byte, h.bufferSize)
-	for {
-		err := setConnectionTimeout(from, h.timeout)
-		if err != nil {
-			logger.Debug().Msgf("error while setting connection deadline for %s: %s", fd, err)
-		}
-
-		bytesRead, err := ReadBytes(from, buf)
-		if err != nil {
-			logger.Debug().Msgf("error reading from %s: %s", fd, err)
-			return
-		}
-
-		if _, err := to.Write(bytesRead); err != nil {
-			logger.Debug().Msgf("error writing to %s", td)
-			return
-		}
-	}
-}
-
-func splitInChunks(ctx context.Context, bytes []byte, size int) [][]byte {
-	logger := log.GetCtxLogger(ctx)
-
-	var chunks [][]byte
-	var raw []byte = bytes
-
 	logger.Debug().Msgf("window-size: %d", size)
 
-	if size > 0 {
-		for {
-			if len(raw) == 0 {
-				break
-			}
-
-			// necessary check to avoid slicing beyond
-			// slice capacity
-			if len(raw) < size {
-				size = len(raw)
-			}
-
-			chunks = append(chunks, raw[0:size])
-			raw = raw[size:]
+	if size <= 0 {
+		if len(raw) < 2 {
+			return [][]byte{raw}
 		}
-
-		return chunks
+		logger.Debug().Msg("using legacy fragmentation")
+		return [][]byte{raw[:1], raw[1:]}
 	}
 
-	// When the given window-size <= 0
-
-	if len(raw) < 1 {
-		return [][]byte{raw}
+	chunks := make([][]byte, 0, (len(raw)+size-1)/size)
+	for len(raw) > 0 {
+		n := size
+		if n > len(raw) {
+			n = len(raw)
+		}
+		chunks = append(chunks, raw[:n])
+		raw = raw[n:]
 	}
-
-	logger.Debug().Msg("using legacy fragmentation")
-
-	return [][]byte{raw[:1], raw[1:]}
+	return chunks
 }
 
-func writeChunks(conn *net.TCPConn, c [][]byte) (n int, err error) {
+func writeChunks(conn *net.TCPConn, chunks [][]byte) (int, error) {
 	total := 0
-	for i := 0; i < len(c); i++ {
-		b, err := conn.Write(c[i])
+	for i, c := range chunks {
+		n, err := conn.Write(c)
+		total += n
 		if err != nil {
-			return 0, nil
+			return total, fmt.Errorf("chunk %d/%d: %w", i+1, len(chunks), err)
 		}
-
-		total += b
 	}
-
 	return total, nil
+}
+
+// pipe runs both directions of the bidirectional copy and tears the
+// connection down with TCP half-close so an EOF in one direction does not
+// truncate an in-flight response in the other.
+func pipe(ctx context.Context, lConn, rConn *net.TCPConn, bufSize, timeoutMs int, domain string) {
+	logger := log.GetCtxLogger(ctx)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		copyWithTimeout(ctx, lConn, rConn, bufSize, timeoutMs)
+		_ = rConn.CloseWrite()
+		_ = lConn.CloseRead()
+	}()
+	go func() {
+		defer wg.Done()
+		copyWithTimeout(ctx, rConn, lConn, bufSize, timeoutMs)
+		_ = lConn.CloseWrite()
+		_ = rConn.CloseRead()
+	}()
+
+	wg.Wait()
+	_ = lConn.Close()
+	_ = rConn.Close()
+	logger.Debug().Msgf("closed proxy connection: %s", domain)
+}
+
+func copyWithTimeout(ctx context.Context, from, to *net.TCPConn, bufSize, timeoutMs int) {
+	logger := log.GetCtxLogger(ctx)
+	buf := make([]byte, bufSize)
+	for {
+		if timeoutMs > 0 {
+			if err := from.SetReadDeadline(time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)); err != nil {
+				logger.Debug().Msgf("setReadDeadline: %s", err)
+				return
+			}
+		}
+		n, err := from.Read(buf)
+		if n > 0 {
+			if _, werr := to.Write(buf[:n]); werr != nil {
+				logger.Debug().Msgf("write: %s", werr)
+				return
+			}
+		}
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				logger.Debug().Msgf("read: %s", err)
+			}
+			return
+		}
+	}
+}
+
+func dialTCP(ctx context.Context, ip string, port int) (*net.TCPConn, error) {
+	d := &net.Dialer{Timeout: httpsDialTimeout, KeepAlive: 30 * time.Second}
+	c, err := d.DialContext(ctx, "tcp", net.JoinHostPort(ip, strconv.Itoa(port)))
+	if err != nil {
+		return nil, err
+	}
+	tcp, ok := c.(*net.TCPConn)
+	if !ok {
+		c.Close()
+		return nil, fmt.Errorf("expected *net.TCPConn, got %T", c)
+	}
+	return tcp, nil
 }

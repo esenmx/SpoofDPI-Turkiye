@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"runtime"
 	"strconv"
 	"unsafe"
 )
@@ -13,8 +14,11 @@ type Args struct {
 	Port           uint16
 	DnsAddr        string
 	DnsPort        uint16
+	DnsFallback    StringArray
 	DnsIPv4Only    bool
 	EnableDoh      bool
+	DohUrl         string
+	DohBootstrapIp string
 	Debug          bool
 	Silent         bool
 	SystemProxy    bool
@@ -40,12 +44,15 @@ func ParseArgs() *Args {
 
 	flag.StringVar(&args.Addr, "addr", "127.0.0.1", "listen address")
 	uintNVar(&args.Port, "port", 8080, "port")
-	flag.StringVar(&args.DnsAddr, "dns-addr", "77.88.8.8", "dns address")
-	uintNVar(&args.DnsPort, "dns-port", 1253, "port number for dns")
-	flag.BoolVar(&args.EnableDoh, "enable-doh", false, "enable 'dns-over-https'")
+	flag.StringVar(&args.DnsAddr, "dns-addr", "1.1.1.1", "primary dns server address")
+	uintNVar(&args.DnsPort, "dns-port", 53, "port number for upstream dns")
+	flag.Var(&args.DnsFallback, "dns-fallback", "additional dns servers used in parallel with -dns-addr; can be given multiple times (default: 8.8.8.8, 9.9.9.9)")
+	flag.BoolVar(&args.EnableDoh, "enable-doh", true, "enable DNS-over-HTTPS as an additional resolver")
+	flag.StringVar(&args.DohUrl, "doh-url", "https://cloudflare-dns.com/dns-query", "DoH endpoint URL")
+	flag.StringVar(&args.DohBootstrapIp, "doh-bootstrap-ip", "1.1.1.1", "IP to dial for the DoH endpoint, bypassing the system resolver (set empty to use the system resolver)")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Silent, "silent", false, "do not show the banner and server information at start up")
-	flag.BoolVar(&args.SystemProxy, "system-proxy", true, "enable system-wide proxy")
+	flag.BoolVar(&args.SystemProxy, "system-proxy", runtime.GOOS == "darwin", "enable system-wide proxy (macOS only; defaults to false on other platforms)")
 	uintNVar(&args.Timeout, "timeout", 0, "timeout in milliseconds; no timeout when not given")
 	uintNVar(&args.WindowSize, "window-size", 5, `chunk size, in number of bytes, for fragmented client hello,
 try lower values if the default value doesn't bypass the DPI;
@@ -61,6 +68,10 @@ fragmentation for the first data packet and the rest
 	flag.BoolVar(&args.DnsIPv4Only, "dns-ipv4-only", false, "resolve only version 4 addresses")
 
 	flag.Parse()
+
+	if len(args.DnsFallback) == 0 {
+		args.DnsFallback = StringArray{"8.8.8.8", "9.9.9.9"}
+	}
 
 	return args
 }

@@ -12,6 +12,11 @@ import (
 	"github.com/miekg/dns"
 )
 
+type Resolver interface {
+	Resolve(ctx context.Context, host string, qTypes []uint16) ([]net.IPAddr, error)
+	String() string
+}
+
 type exchangeFunc = func(ctx context.Context, msg *dns.Msg) (*dns.Msg, error)
 
 type DNSResult struct {
@@ -21,17 +26,19 @@ type DNSResult struct {
 
 func recordTypeIDToName(id uint16) string {
 	switch id {
-	case 1:
+	case dns.TypeA:
 		return "A"
-	case 28:
+	case dns.TypeAAAA:
 		return "AAAA"
 	}
 	return strconv.FormatUint(uint64(id), 10)
 }
 
 func parseAddrsFromMsg(msg *dns.Msg) []net.IPAddr {
+	if msg == nil {
+		return nil
+	}
 	var addrs []net.IPAddr
-
 	for _, record := range msg.Answer {
 		switch ipRecord := record.(type) {
 		case *dns.A:
@@ -49,16 +56,16 @@ func sortAddrs(addrs []net.IPAddr) {
 
 func lookupAllTypes(ctx context.Context, host string, qTypes []uint16, exchange exchangeFunc) <-chan *DNSResult {
 	var wg sync.WaitGroup
-	resCh := make(chan *DNSResult)
+	resCh := make(chan *DNSResult, len(qTypes))
 
 	for _, qType := range qTypes {
 		wg.Add(1)
 		go func(qType uint16) {
 			defer wg.Done()
+			res := lookupType(ctx, host, qType, exchange)
 			select {
+			case resCh <- res:
 			case <-ctx.Done():
-				return
-			case resCh <- lookupType(ctx, host, qType, exchange):
 			}
 		}(qType)
 	}
@@ -75,9 +82,7 @@ func lookupType(ctx context.Context, host string, queryType uint16, exchange exc
 	msg := newMsg(host, queryType)
 	resp, err := exchange(ctx, msg)
 	if err != nil {
-		queryName := recordTypeIDToName(queryType)
-		err = fmt.Errorf("resolving %s, query type %s: %w", host, queryName, err)
-		return &DNSResult{err: err}
+		return &DNSResult{err: fmt.Errorf("%s %s: %w", recordTypeIDToName(queryType), host, err)}
 	}
 	return &DNSResult{msg: resp}
 }
@@ -85,6 +90,7 @@ func lookupType(ctx context.Context, host string, queryType uint16, exchange exc
 func newMsg(host string, qType uint16) *dns.Msg {
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(host), qType)
+	msg.RecursionDesired = true
 	return msg
 }
 
@@ -92,23 +98,31 @@ func processResults(ctx context.Context, resCh <-chan *DNSResult) ([]net.IPAddr,
 	var errs []error
 	var addrs []net.IPAddr
 
-	for result := range resCh {
-		if result.err != nil {
-			errs = append(errs, result.err)
-			continue
+	for {
+		select {
+		case res, ok := <-resCh:
+			if !ok {
+				if len(addrs) == 0 {
+					return nil, errors.Join(errs...)
+				}
+				if len(addrs) > 1 {
+					sortAddrs(addrs)
+				}
+				return addrs, nil
+			}
+			if res.err != nil {
+				errs = append(errs, res.err)
+				continue
+			}
+			addrs = append(addrs, parseAddrsFromMsg(res.msg)...)
+		case <-ctx.Done():
+			if len(addrs) > 0 {
+				if len(addrs) > 1 {
+					sortAddrs(addrs)
+				}
+				return addrs, nil
+			}
+			return nil, ctx.Err()
 		}
-		resultAddrs := parseAddrsFromMsg(result.msg)
-		addrs = append(addrs, resultAddrs...)
 	}
-	select {
-	case <-ctx.Done():
-		return nil, errors.New("canceled")
-	default:
-		if len(addrs) == 0 {
-			return addrs, errors.Join(errs...)
-		}
-	}
-
-	sortAddrs(addrs)
-	return addrs, nil
 }

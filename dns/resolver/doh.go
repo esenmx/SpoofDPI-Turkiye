@@ -6,9 +6,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
-	"regexp"
+	"net/url"
 	"time"
 
 	"github.com/miekg/dns"
@@ -16,42 +17,58 @@ import (
 
 type DOHResolver struct {
 	upstream string
+	host     string
 	client   *http.Client
 }
 
-func NewDOHResolver(host string) *DOHResolver {
-	c := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   3 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-			TLSHandshakeTimeout: 5 * time.Second,
-			MaxIdleConnsPerHost: 100,
-			MaxIdleConns:        100,
+// NewDOHResolver builds a resolver that talks DNS-over-HTTPS to upstream.
+// bootstrapIP, when non-empty, is dialed directly so the resolver does not
+// depend on the system resolver to find its own server (avoids a chicken-
+// and-egg problem on networks where the system resolver is poisoned).
+func NewDOHResolver(upstream, bootstrapIP string) *DOHResolver {
+	u, err := url.Parse(upstream)
+	if err != nil || u.Host == "" {
+		// Fall back to a single-host build so the call surface still works.
+		u = &url.URL{Scheme: "https", Host: upstream, Path: "/dns-query"}
+	}
+	if u.Path == "" {
+		u.Path = "/dns-query"
+	}
+
+	host := u.Hostname()
+	dialer := &net.Dialer{Timeout: 3 * time.Second, KeepAlive: 30 * time.Second}
+
+	transport := &http.Transport{
+		ForceAttemptHTTP2:   true,
+		MaxIdleConns:        4,
+		MaxIdleConnsPerHost: 2,
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 5 * time.Second,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if bootstrapIP != "" {
+				reqHost, reqPort, splitErr := net.SplitHostPort(addr)
+				if splitErr == nil && reqHost == host {
+					addr = net.JoinHostPort(bootstrapIP, reqPort)
+				}
+			}
+			return dialer.DialContext(ctx, network, addr)
 		},
 	}
 
-	host = regexp.MustCompile(`^https://|/dns-query$`).ReplaceAllString(host, "")
-	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
-		host = fmt.Sprintf("[%s]", ip)
-	}
-
 	return &DOHResolver{
-		upstream: "https://" + host + "/dns-query",
-		client:   c,
+		upstream: u.String(),
+		host:     host,
+		client:   &http.Client{Timeout: 5 * time.Second, Transport: transport},
 	}
 }
 
 func (r *DOHResolver) Resolve(ctx context.Context, host string, qTypes []uint16) ([]net.IPAddr, error) {
 	resultCh := lookupAllTypes(ctx, host, qTypes, r.exchange)
-	addrs, err := processResults(ctx, resultCh)
-	return addrs, err
+	return processResults(ctx, resultCh)
 }
 
 func (r *DOHResolver) String() string {
-	return fmt.Sprintf("doh resolver(%s)", r.upstream)
+	return fmt.Sprintf("doh(%s)", r.upstream)
 }
 
 func (r *DOHResolver) exchange(ctx context.Context, msg *dns.Msg) (*dns.Msg, error) {
@@ -60,40 +77,42 @@ func (r *DOHResolver) exchange(ctx context.Context, msg *dns.Msg) (*dns.Msg, err
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s?dns=%s", r.upstream, base64.RawStdEncoding.EncodeToString(pack))
-	req, err := http.NewRequest("GET", url, nil)
+	endpoint := fmt.Sprintf("%s?dns=%s", r.upstream, base64.RawURLEncoding.EncodeToString(pack))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	req = req.WithContext(ctx)
 	req.Header.Set("Accept", "application/dns-message")
 
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+	defer io.Copy(io.Discard, resp.Body)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("doh status error")
+		return nil, fmt.Errorf("doh http %d", resp.StatusCode)
 	}
 
-	buf := bytes.Buffer{}
-	_, err = buf.ReadFrom(resp.Body)
-	if err != nil {
+	body := bytes.Buffer{}
+	if _, err := io.Copy(&body, io.LimitReader(resp.Body, 64*1024)); err != nil {
 		return nil, err
 	}
 
-	resultMsg := new(dns.Msg)
-	err = resultMsg.Unpack(buf.Bytes())
-	if err != nil {
+	out := new(dns.Msg)
+	if err := out.Unpack(body.Bytes()); err != nil {
 		return nil, err
 	}
 
-	if resultMsg.Rcode != dns.RcodeSuccess {
-		return nil, errors.New("doh rcode wasn't successful")
+	switch out.Rcode {
+	case dns.RcodeSuccess:
+		return out, nil
+	case dns.RcodeNameError:
+		return nil, errNXDomain
+	default:
+		return nil, fmt.Errorf("doh rcode %s", dns.RcodeToString[out.Rcode])
 	}
-
-	return resultMsg, nil
 }
+
+var errNXDomain = errors.New("nxdomain")
