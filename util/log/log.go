@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/esenmx/SpoofDPI/util"
+	"github.com/esenmx/SpoofDPI-Turkiye/util"
 	"github.com/rs/zerolog"
 )
 

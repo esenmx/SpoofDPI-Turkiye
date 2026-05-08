@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/esenmx/SpoofDPI/dns/resolver"
-	"github.com/esenmx/SpoofDPI/util"
-	"github.com/esenmx/SpoofDPI/util/log"
+	"github.com/esenmx/SpoofDPI-Turkiye/dns/resolver"
+	"github.com/esenmx/SpoofDPI-Turkiye/util"
+	"github.com/esenmx/SpoofDPI-Turkiye/util/log"
 	"github.com/miekg/dns"
 )
 

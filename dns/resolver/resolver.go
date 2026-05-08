@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/esenmx/SpoofDPI/dns/addrselect"
+	"github.com/esenmx/SpoofDPI-Turkiye/dns/addrselect"
 	"github.com/miekg/dns"
 )
 

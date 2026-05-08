@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/esenmx/SpoofDPI/util"
+	"github.com/esenmx/SpoofDPI-Turkiye/util"
 )
 
 // TestBypassChainExcludesSystemResolver guards the regression where the

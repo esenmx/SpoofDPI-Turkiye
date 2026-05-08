@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/esenmx/SpoofDPI/packet"
-	"github.com/esenmx/SpoofDPI/util"
-	"github.com/esenmx/SpoofDPI/util/log"
+	"github.com/esenmx/SpoofDPI-Turkiye/packet"
+	"github.com/esenmx/SpoofDPI-Turkiye/util"
+	"github.com/esenmx/SpoofDPI-Turkiye/util/log"
 )
 
 const (

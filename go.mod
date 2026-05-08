@@ -1,4 +1,4 @@
-module github.com/esenmx/SpoofDPI
+module github.com/esenmx/SpoofDPI-Turkiye
 
 go 1.26.3
 
