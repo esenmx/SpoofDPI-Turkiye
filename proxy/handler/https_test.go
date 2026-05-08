@@ -2,16 +2,24 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
+func collect(seq func(yield func([]byte) bool)) [][]byte {
+	var out [][]byte
+	for c := range seq {
+		out = append(out, c)
+	}
+	return out
+}
+
 func TestSplitInChunksEvenSplit(t *testing.T) {
-	chunks := splitInChunks(context.Background(), []byte("ABCDEFGH"), 2)
+	chunks := slices.Collect(splitInChunks([]byte("ABCDEFGH"), 2))
 	if len(chunks) != 4 {
 		t.Fatalf("expected 4 chunks, got %d", len(chunks))
 	}
@@ -21,14 +29,14 @@ func TestSplitInChunksEvenSplit(t *testing.T) {
 }
 
 func TestSplitInChunksTrailingRemainder(t *testing.T) {
-	chunks := splitInChunks(context.Background(), []byte("ABCDE"), 2)
+	chunks := slices.Collect(splitInChunks([]byte("ABCDE"), 2))
 	if len(chunks) != 3 || !bytes.Equal(chunks[2], []byte("E")) {
 		t.Fatalf("unexpected chunks: %v", chunks)
 	}
 }
 
 func TestSplitInChunksLegacyZeroWindow(t *testing.T) {
-	chunks := splitInChunks(context.Background(), []byte("HELLO"), 0)
+	chunks := slices.Collect(splitInChunks([]byte("HELLO"), 0))
 	if len(chunks) != 2 {
 		t.Fatalf("expected 2 chunks, got %d", len(chunks))
 	}
@@ -38,9 +46,16 @@ func TestSplitInChunksLegacyZeroWindow(t *testing.T) {
 }
 
 func TestSplitInChunksSingleByteLegacy(t *testing.T) {
-	chunks := splitInChunks(context.Background(), []byte("X"), 0)
+	chunks := slices.Collect(splitInChunks([]byte("X"), 0))
 	if len(chunks) != 1 {
 		t.Fatalf("expected 1 chunk for single byte, got %d", len(chunks))
+	}
+}
+
+func TestSplitInChunksEmpty(t *testing.T) {
+	chunks := slices.Collect(splitInChunks(nil, 0))
+	if len(chunks) != 0 {
+		t.Fatalf("expected no chunks for empty, got %d", len(chunks))
 	}
 }
 
@@ -71,12 +86,11 @@ func TestWriteChunksReportsErrors(t *testing.T) {
 	client := <-dialed
 	defer client.Close()
 
-	// Force any subsequent write to fail deterministically.
 	if err := client.SetWriteDeadline(time.Unix(1, 0)); err != nil {
 		t.Fatal(err)
 	}
 
-	chunks := [][]byte{bytes.Repeat([]byte{0xAB}, 64)}
+	chunks := slices.Values([][]byte{bytes.Repeat([]byte{0xAB}, 64)})
 	_, werr := writeChunks(client, chunks)
 	if werr == nil {
 		t.Fatal("expected writeChunks to surface a write error")
@@ -84,5 +98,5 @@ func TestWriteChunksReportsErrors(t *testing.T) {
 	if !strings.Contains(werr.Error(), "chunk") {
 		t.Fatalf("expected wrapped chunk error, got %v", werr)
 	}
-	_ = errors.Unwrap(werr) // sanity: no panic
+	_ = errors.Unwrap(werr)
 }

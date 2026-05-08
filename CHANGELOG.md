@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Performance / Toolchain
+- Bumped Go to `1.26.3` (also reflected in the Dockerfile).
+- `cacheKey` builds the hash key with `unsafe.String(unsafe.SliceData(b), len(b))` instead of `string(b)`, eliminating one byte-copy per DNS lookup.
+- TLS ClientHello fragmentation now streams via `iter.Seq[[]byte]` (`slices.Chunk`) instead of materializing a `[][]byte` slice. `writeChunks` consumes the iterator directly.
+- Per-direction copy buffer in `pipe()` is reused via `sync.Pool` instead of being freshly allocated per accepted connection.
+- `ChainResolver` uses `sync.WaitGroup.Go` for cleaner per-resolver goroutine lifecycle.
+- `addrselect.commonPrefixLen` uses `math/bits.LeadingZeros8` instead of an open-coded shift loop on bit-mismatch.
+
 ### Added
 - Parallel-race DNS resolver: tries `-dns-addr`, every `-dns-fallback`, the configured DoH endpoint, and the system resolver in parallel and returns the fastest non-empty answer. Survives single-upstream throttling, hijacking, and RST injection on Turkish ISPs.
 - TTL+negative DNS cache that coalesces concurrent in-flight lookups for the same host.

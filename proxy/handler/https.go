@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"net"
 	"regexp"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -18,7 +20,17 @@ import (
 
 const (
 	httpsDialTimeout = 10 * time.Second
+	defaultBufSize   = 4 * 1024
 )
+
+// bufPool reuses the per-direction read buffer in pipe(). Each accepted
+// connection used to allocate a fresh 4 KiB slice for each direction.
+var bufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, defaultBufSize)
+		return &b
+	},
+}
 
 type HttpsHandler struct {
 	bufferSize      int
@@ -31,7 +43,7 @@ type HttpsHandler struct {
 
 func NewHttpsHandler(timeout int, windowSize int, allowedPatterns []*regexp.Regexp, exploit bool) *HttpsHandler {
 	return &HttpsHandler{
-		bufferSize:      4 * 1024,
+		bufferSize:      defaultBufSize,
 		protocol:        "HTTPS",
 		timeout:         timeout,
 		windowSize:      windowSize,
@@ -83,9 +95,8 @@ func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, initPkt *p
 	logger.Debug().Msgf("client sent hello %d bytes", len(clientHello))
 
 	if h.exploit {
-		logger.Debug().Msgf("writing chunked client hello to %s", initPkt.Domain())
-		chunks := splitInChunks(ctx, clientHello, h.windowSize)
-		if _, err := writeChunks(rConn, chunks); err != nil {
+		logger.Debug().Msgf("writing chunked client hello to %s (window=%d)", initPkt.Domain(), h.windowSize)
+		if _, err := writeChunks(rConn, splitInChunks(clientHello, h.windowSize)); err != nil {
 			logger.Debug().Msgf("error writing chunked client hello to %s: %s", initPkt.Domain(), err)
 			lConn.Close()
 			rConn.Close()
@@ -104,37 +115,37 @@ func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, initPkt *p
 	pipe(ctx, lConn, rConn, h.bufferSize, h.timeout, initPkt.Domain())
 }
 
-func splitInChunks(ctx context.Context, raw []byte, size int) [][]byte {
-	logger := log.GetCtxLogger(ctx)
-	logger.Debug().Msgf("window-size: %d", size)
-
+// splitInChunks returns an iterator over fragments of raw. With size > 0 it
+// emits fixed-size chunks (final remainder allowed); with size <= 0 it falls
+// back to the legacy "1 byte then the rest" split that the original SpoofDPI
+// shipped with.
+func splitInChunks(raw []byte, size int) iter.Seq[[]byte] {
 	if size <= 0 {
-		if len(raw) < 2 {
-			return [][]byte{raw}
+		return func(yield func([]byte) bool) {
+			switch {
+			case len(raw) == 0:
+				return
+			case len(raw) < 2:
+				yield(raw)
+			default:
+				if !yield(raw[:1]) {
+					return
+				}
+				yield(raw[1:])
+			}
 		}
-		logger.Debug().Msg("using legacy fragmentation")
-		return [][]byte{raw[:1], raw[1:]}
 	}
-
-	chunks := make([][]byte, 0, (len(raw)+size-1)/size)
-	for len(raw) > 0 {
-		n := size
-		if n > len(raw) {
-			n = len(raw)
-		}
-		chunks = append(chunks, raw[:n])
-		raw = raw[n:]
-	}
-	return chunks
+	return slices.Chunk(raw, size)
 }
 
-func writeChunks(conn *net.TCPConn, chunks [][]byte) (int, error) {
-	total := 0
-	for i, c := range chunks {
+func writeChunks(conn *net.TCPConn, chunks iter.Seq[[]byte]) (int, error) {
+	total, i := 0, 0
+	for c := range chunks {
+		i++
 		n, err := conn.Write(c)
 		total += n
 		if err != nil {
-			return total, fmt.Errorf("chunk %d/%d: %w", i+1, len(chunks), err)
+			return total, fmt.Errorf("chunk %d: %w", i, err)
 		}
 	}
 	return total, nil
@@ -147,20 +158,16 @@ func pipe(ctx context.Context, lConn, rConn *net.TCPConn, bufSize, timeoutMs int
 	logger := log.GetCtxLogger(ctx)
 
 	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		copyWithTimeout(ctx, lConn, rConn, bufSize, timeoutMs)
 		_ = rConn.CloseWrite()
 		_ = lConn.CloseRead()
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	wg.Go(func() {
 		copyWithTimeout(ctx, rConn, lConn, bufSize, timeoutMs)
 		_ = lConn.CloseWrite()
 		_ = rConn.CloseRead()
-	}()
+	})
 
 	wg.Wait()
 	_ = lConn.Close()
@@ -170,10 +177,21 @@ func pipe(ctx context.Context, lConn, rConn *net.TCPConn, bufSize, timeoutMs int
 
 func copyWithTimeout(ctx context.Context, from, to *net.TCPConn, bufSize, timeoutMs int) {
 	logger := log.GetCtxLogger(ctx)
-	buf := make([]byte, bufSize)
+
+	var buf []byte
+	var pooled *[]byte
+	if bufSize == defaultBufSize {
+		pooled = bufPool.Get().(*[]byte)
+		defer bufPool.Put(pooled)
+		buf = *pooled
+	} else {
+		buf = make([]byte, bufSize)
+	}
+
+	timeout := time.Duration(timeoutMs) * time.Millisecond
 	for {
 		if timeoutMs > 0 {
-			if err := from.SetReadDeadline(time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)); err != nil {
+			if err := from.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 				logger.Debug().Msgf("setReadDeadline: %s", err)
 				return
 			}

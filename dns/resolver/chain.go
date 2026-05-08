@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -46,8 +47,9 @@ func (c *ChainResolver) Resolve(ctx context.Context, host string, qTypes []uint1
 	defer cancel()
 
 	out := make(chan chainResult, len(c.resolvers))
+	var wg sync.WaitGroup
 	for _, r := range c.resolvers {
-		go func(r Resolver) {
+		wg.Go(func() {
 			tctx := cctx
 			if c.perTry > 0 {
 				var tcancel context.CancelFunc
@@ -59,11 +61,11 @@ func (c *ChainResolver) Resolve(ctx context.Context, host string, qTypes []uint1
 			case out <- chainResult{addrs: addrs, err: err, from: r.String()}:
 			case <-cctx.Done():
 			}
-		}(r)
+		})
 	}
 
 	var errs []error
-	for i := 0; i < len(c.resolvers); i++ {
+	for range c.resolvers {
 		select {
 		case res := <-out:
 			if len(res.addrs) > 0 {

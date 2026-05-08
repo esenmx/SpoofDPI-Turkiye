@@ -1,6 +1,6 @@
 module github.com/esenmx/SpoofDPI
 
-go 1.24.0
+go 1.26.3
 
 require (
 	github.com/miekg/dns v1.1.68

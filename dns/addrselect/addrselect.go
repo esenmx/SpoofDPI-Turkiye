@@ -1,6 +1,7 @@
 package addrselect
 
 import (
+	"math/bits"
 	"net"
 	"net/netip"
 	"sort"
@@ -441,23 +442,15 @@ func commonPrefixLen(a netip.Addr, b net.IP) (cpl int) {
 		b = b[:8]
 	}
 	for len(aAsSlice) > 0 {
-		if aAsSlice[0] == b[0] {
+		diff := aAsSlice[0] ^ b[0]
+		if diff == 0 {
 			cpl += 8
 			aAsSlice = aAsSlice[1:]
 			b = b[1:]
 			continue
 		}
-		bits := 8
-		ab, bb := aAsSlice[0], b[0]
-		for {
-			ab >>= 1
-			bb >>= 1
-			bits--
-			if ab == bb {
-				cpl += bits
-				return
-			}
-		}
+		cpl += bits.LeadingZeros8(diff)
+		return
 	}
 	return
 }
