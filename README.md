@@ -20,34 +20,43 @@ Programımız Türkiye'ye özel olarak konfigure edildiği için sizin için uyg
 ```text
 Kullanım: spoofdpi [seçenekler...]
   -addr string
-        adresi dinler (varsayılan "127.0.0.1")
-  -debug
-        hata ayıklamayı aktif edeer
-  -dns-addr string
-        dns adresi (varsayılan "77.88.8.8")
-  -dns-ipv4-only
-        sadece sürüm 4 adreslerini dinler
-  -dns-port value
-        dns için port numarası (varsayılan 1253)
-  -enable-doh
-        'dns-over-https' aktif eder
-  -pattern value
-        DPI'yı yalnızca bu regex deseniyle eşleşen paketlerde atlar; birden çok kez verilebilir
+        dinleme adresi (varsayılan "127.0.0.1")
   -port value
         port (varsayılan 8080)
-  -silent
-        başlangıçta afişi ve sunucu bilgilerini gösterme
-  -system-proxy
-        sistem genelinde proxy aktif et (varsayılan true)
-  -timeout value
-        milisaniye cinsinden zaman aşımı; verilmediğinde zaman aşımı olmaz
-  -v    spoofdpi'nin sürümünü yazdırır; bu, diğer bazı ilgili bilgileri içerebilir
+  -dns-addr string
+        birincil dns sunucusu (varsayılan "1.1.1.1")
+  -dns-port value
+        dns için port numarası (varsayılan 53)
+  -dns-fallback value
+        ek dns sunucuları; -dns-addr ile paralel sorgulanır; birden çok kez verilebilir
+        (varsayılan: 8.8.8.8, 9.9.9.9)
+  -dns-ipv4-only
+        sadece IPv4 adreslerini çözer
+  -enable-doh
+        DNS-over-HTTPS'i ek bir çözümleyici olarak etkinleştirir (varsayılan true)
+  -doh-url string
+        DoH uç noktası URL'si (varsayılan "https://cloudflare-dns.com/dns-query")
+  -doh-bootstrap-ip string
+        DoH için doğrudan aranacak IP; sistem çözümleyicisini atlar (varsayılan "1.1.1.1")
+  -pattern value
+        DPI'yı yalnızca bu regex deseniyle eşleşen paketlerde atlar; birden çok kez verilebilir
   -window-size value
         Parçalanmış istemci dönüşü için bayt sayısı cinsinden yığın boyutu,
         varsayılan değer DPI'ı atlamazsa daha düşük değerler deneyin;
         verilmediğinde, istemci dönüş paketi iki parça halinde gönderilecektir:
-        ilk veri paketi için parçalama ve geri kalanı şeklinde
+        ilk veri paketi için parçalama ve geri kalanı şeklinde (varsayılan 5)
+  -timeout value
+        milisaniye cinsinden zaman aşımı; verilmediğinde zaman aşımı olmaz
+  -system-proxy
+        sistem genelinde proxy aktif et (yalnızca macOS; diğer platformlarda göz ardı edilir)
+  -silent
+        başlangıçta afişi ve sunucu bilgilerini gösterme
+  -debug
+        hata ayıklamayı aktif eder
+  -v    spoofdpi'nin sürümünü yazdırır; bu, diğer bazı ilgili bilgileri içerebilir
 ```
+
+ISP'ye özel ince ayar için: [`_docs/TR_DPI.md`](_docs/TR_DPI.md).
 
 > Chrome tarayıcısında Hotspot Shield gibi herhangi bir vpn uzantısı kullanıyorsanız,
   Ayarlar > Eklentiler, bölümüne gidin ve onları devre dışı bırakın.
