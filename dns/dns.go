@@ -2,9 +2,11 @@ package dns
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/esenmx/SpoofDPI/dns/resolver"
@@ -21,34 +23,60 @@ type Resolver interface {
 }
 
 type Dns struct {
-	host          string
-	port          string
-	systemClient  Resolver
-	generalClient Resolver
-	dohClient     Resolver
-	qTypes        []uint16
+	systemClient Resolver
+	bypassClient Resolver
+	qTypes       []uint16
+	totalBudget  time.Duration
 }
 
 func NewDns(config *util.Config) *Dns {
-	addr := config.DnsAddr
-	port := strconv.Itoa(config.DnsPort)
-	var qTypes []uint16
+	qTypes := []uint16{dns.TypeAAAA, dns.TypeA}
 	if config.DnsIPv4Only {
 		qTypes = []uint16{dns.TypeA}
-	} else {
-		qTypes = []uint16{dns.TypeAAAA, dns.TypeA}
 	}
+
+	port := strconv.Itoa(config.DnsPort)
+
+	var chain []resolver.Resolver
+	seen := make(map[string]struct{})
+	addPlain := func(addr string) {
+		addr = strings.TrimSpace(addr)
+		if addr == "" {
+			return
+		}
+		server := net.JoinHostPort(addr, port)
+		if _, dup := seen[server]; dup {
+			return
+		}
+		seen[server] = struct{}{}
+		chain = append(chain, resolver.NewGeneralResolver(server))
+	}
+
+	addPlain(config.DnsAddr)
+	for _, fb := range config.DnsFallback {
+		addPlain(fb)
+	}
+
+	if config.EnableDoh && config.DohUrl != "" {
+		chain = append(chain, resolver.NewDOHResolver(config.DohUrl, config.DohBootstrapIp))
+	}
+
+	// system as last-ditch fallback so a fully misconfigured chain still
+	// resolves names that the host's own resolver can answer.
+	chain = append(chain, resolver.NewSystemResolver())
+
+	bypass := resolver.NewChainResolver(chain, 1500*time.Millisecond)
+	cached := resolver.NewCache(bypass, 5*time.Minute, 10*time.Second, 4096)
+
 	return &Dns{
-		host:          config.DnsAddr,
-		port:          port,
-		systemClient:  resolver.NewSystemResolver(),
-		generalClient: resolver.NewGeneralResolver(net.JoinHostPort(addr, port)),
-		dohClient:     resolver.NewDOHResolver(addr),
-		qTypes:        qTypes,
+		systemClient: resolver.NewSystemResolver(),
+		bypassClient: cached,
+		qTypes:       qTypes,
+		totalBudget:  3 * time.Second,
 	}
 }
 
-func (d *Dns) ResolveHost(ctx context.Context, host string, enableDoh bool, useSystemDns bool) (string, error) {
+func (d *Dns) ResolveHost(ctx context.Context, host string, _enableDoh bool, useSystemDns bool) (string, error) {
 	ctx = util.GetCtxWithScope(ctx, scopeDNS)
 	logger := log.GetCtxLogger(ctx)
 
@@ -56,50 +84,34 @@ func (d *Dns) ResolveHost(ctx context.Context, host string, enableDoh bool, useS
 		return ip.String(), nil
 	}
 
-	clt := d.clientFactory(enableDoh, useSystemDns)
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	clt := d.bypassClient
+	if useSystemDns {
+		clt = d.systemClient
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, d.totalBudget)
 	defer cancel()
 
 	logger.Debug().Msgf("resolving %s using %s", host, clt)
-
 	t := time.Now()
 
 	addrs, err := clt.Resolve(ctx, host, d.qTypes)
-	// addrs, err := clt.Resolve(ctx, host, []uint16{dns.TypeAAAA})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", clt, err)
 	}
-
-	if len(addrs) > 0 {
-		d := time.Since(t).Milliseconds()
-		logger.Debug().Msgf("resolved %s from %s in %d ms", addrs[0].String(), host, d)
-		return addrs[0].String(), nil
+	if len(addrs) == 0 {
+		return "", fmt.Errorf("%s returned no addresses for %s", clt, host)
 	}
 
-	return "", fmt.Errorf("could not resolve %s using %s", host, clt)
-}
-
-func (d *Dns) clientFactory(enableDoh bool, useSystemDns bool) Resolver {
-	if useSystemDns {
-		return d.systemClient
-	}
-
-	if enableDoh {
-		return d.dohClient
-	}
-
-	return d.generalClient
+	logger.Debug().Msgf("resolved %s -> %s (%d candidates) in %d ms",
+		host, addrs[0].String(), len(addrs), time.Since(t).Milliseconds())
+	return addrs[0].String(), nil
 }
 
 func parseIpAddr(addr string) (*net.IPAddr, error) {
 	ip := net.ParseIP(addr)
 	if ip == nil {
-		return nil, fmt.Errorf("%s is not an ip address", addr)
+		return nil, errors.New("not an ip address")
 	}
-
-	ipAddr := &net.IPAddr{
-		IP: ip,
-	}
-
-	return ipAddr, nil
+	return &net.IPAddr{IP: ip}, nil
 }

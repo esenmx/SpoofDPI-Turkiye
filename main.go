@@ -2,14 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/esenmx/SpoofDPI/util/log"
-
 	"github.com/esenmx/SpoofDPI/proxy"
 	"github.com/esenmx/SpoofDPI/util"
+	"github.com/esenmx/SpoofDPI/util/log"
 	"github.com/esenmx/SpoofDPI/version"
 )
 
@@ -21,7 +21,10 @@ func main() {
 	}
 
 	config := util.GetConfig()
-	config.Load(args)
+	if err := config.Load(args); err != nil {
+		fmt.Fprintln(os.Stderr, "config error:", err)
+		os.Exit(2)
+	}
 
 	log.InitLogger(config)
 	ctx := util.GetCtxWithScope(context.Background(), "MAIN")

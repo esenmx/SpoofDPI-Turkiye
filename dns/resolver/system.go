@@ -3,6 +3,8 @@ package resolver
 import (
 	"context"
 	"net"
+
+	"github.com/miekg/dns"
 )
 
 type SystemResolver struct {
@@ -16,13 +18,41 @@ func NewSystemResolver() *SystemResolver {
 }
 
 func (r *SystemResolver) String() string {
-	return "system resolver"
+	return "system"
 }
 
-func (r *SystemResolver) Resolve(ctx context.Context, host string, _ []uint16) ([]net.IPAddr, error) {
-	addrs, err := r.LookupIPAddr(ctx, host)
+func (r *SystemResolver) Resolve(ctx context.Context, host string, qTypes []uint16) ([]net.IPAddr, error) {
+	network := networkForQTypes(qTypes)
+	ips, err := r.LookupIP(ctx, network, host)
 	if err != nil {
-		return []net.IPAddr{}, err
+		return nil, err
+	}
+	addrs := make([]net.IPAddr, 0, len(ips))
+	for _, ip := range ips {
+		addrs = append(addrs, net.IPAddr{IP: ip})
+	}
+	if len(addrs) > 1 {
+		sortAddrs(addrs)
 	}
 	return addrs, nil
+}
+
+func networkForQTypes(qTypes []uint16) string {
+	has4, has6 := false, false
+	for _, q := range qTypes {
+		switch q {
+		case dns.TypeA:
+			has4 = true
+		case dns.TypeAAAA:
+			has6 = true
+		}
+	}
+	switch {
+	case has4 && !has6:
+		return "ip4"
+	case has6 && !has4:
+		return "ip6"
+	default:
+		return "ip"
+	}
 }

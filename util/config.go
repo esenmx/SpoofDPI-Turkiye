@@ -13,8 +13,11 @@ type Config struct {
 	Port            int
 	DnsAddr         string
 	DnsPort         int
+	DnsFallback     []string
 	DnsIPv4Only     bool
 	EnableDoh       bool
+	DohUrl          string
+	DohBootstrapIp  string
 	Debug           bool
 	Silent          bool
 	SystemProxy     bool
@@ -32,29 +35,43 @@ func GetConfig() *Config {
 	return config
 }
 
-func (c *Config) Load(args *Args) {
+func (c *Config) Load(args *Args) error {
 	c.Addr = args.Addr
 	c.Port = int(args.Port)
 	c.DnsAddr = args.DnsAddr
 	c.DnsPort = int(args.DnsPort)
+	c.DnsFallback = []string(args.DnsFallback)
 	c.DnsIPv4Only = args.DnsIPv4Only
 	c.Debug = args.Debug
 	c.EnableDoh = args.EnableDoh
+	c.DohUrl = args.DohUrl
+	c.DohBootstrapIp = args.DohBootstrapIp
 	c.Silent = args.Silent
 	c.SystemProxy = args.SystemProxy
 	c.Timeout = int(args.Timeout)
-	c.AllowedPatterns = parseAllowedPattern(args.AllowedPattern)
 	c.WindowSize = int(args.WindowSize)
+
+	patterns, err := compileAllowedPatterns(args.AllowedPattern)
+	if err != nil {
+		return err
+	}
+	c.AllowedPatterns = patterns
+	return nil
 }
 
-func parseAllowedPattern(patterns StringArray) []*regexp.Regexp {
-	var allowedPatterns []*regexp.Regexp
-
-	for _, pattern := range patterns {
-		allowedPatterns = append(allowedPatterns, regexp.MustCompile(pattern))
+func compileAllowedPatterns(patterns StringArray) ([]*regexp.Regexp, error) {
+	if len(patterns) == 0 {
+		return nil, nil
 	}
-
-	return allowedPatterns
+	out := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid -pattern %q: %w", pattern, err)
+		}
+		out = append(out, re)
+	}
+	return out, nil
 }
 
 func PrintColoredBanner() {
