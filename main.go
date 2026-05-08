@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -14,20 +15,25 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	args := util.ParseArgs()
 	if args.Version {
 		version.PrintVersion()
-		os.Exit(0)
+		return 0
 	}
 
 	config := util.GetConfig()
 	if err := config.Load(args); err != nil {
 		fmt.Fprintln(os.Stderr, "config error:", err)
-		os.Exit(2)
+		return 2
 	}
 
 	log.InitLogger(config)
-	ctx := util.GetCtxWithScope(context.Background(), "MAIN")
+	ctx, cancel := context.WithCancel(util.GetCtxWithScope(context.Background(), "MAIN"))
+	defer cancel()
 	logger := log.GetCtxLogger(ctx)
 
 	pxy := proxy.New(config)
@@ -38,24 +44,40 @@ func main() {
 
 	if config.SystemProxy {
 		if err := util.SetOsProxy(uint16(config.Port)); err != nil {
-			logger.Fatal().Msgf("error while changing proxy settings: %s", err)
+			logger.Error().Msgf("error while changing proxy settings: %s", err)
+			return 1
 		}
 		defer func() {
 			if err := util.UnsetOsProxy(); err != nil {
-				logger.Fatal().Msgf("error while disabling proxy: %s", err)
+				logger.Error().Msgf("error while disabling proxy: %s", err)
 			}
 		}()
 	}
 
-	go pxy.Start(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- pxy.Start(ctx)
+	}()
 
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(
-		sigs,
+	signal.Notify(sigs,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
 		syscall.SIGHUP,
 	)
-	<-sigs
+
+	select {
+	case sig := <-sigs:
+		logger.Info().Msgf("received %s, shutting down", sig)
+		cancel()
+		<-errCh
+		return 0
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error().Msgf("proxy exited: %s", err)
+			return 1
+		}
+		return 0
+	}
 }

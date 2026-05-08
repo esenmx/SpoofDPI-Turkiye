@@ -21,33 +21,42 @@ Since our program is configured specifically for Turkey, you can start and run t
 Usage: spoofdpi [options...]
   -addr string
         listen address (default "127.0.0.1")
-  -debug
-        enable debug output
-  -dns-addr string
-        dns address (default "77.88.8.8")
-  -dns-ipv4-only
-        resolve only version 4 addresses
-  -dns-port value
-        port number for dns (default 1253)
-  -enable-doh
-        enable 'dns-over-https'
-  -pattern value
-        bypass DPI only on packets matching this regex pattern; can be given multiple times
   -port value
         port (default 8080)
-  -silent
-        do not show the banner and server information at start up
-  -system-proxy
-        enable system-wide proxy (default true)
-  -timeout value
-        timeout in milliseconds; no timeout when not given
-  -v    print spoofdpi's version; this may contain some other relevant information
+  -dns-addr string
+        primary dns server (default "1.1.1.1")
+  -dns-port value
+        port number for upstream dns (default 53)
+  -dns-fallback value
+        additional dns servers used in parallel with -dns-addr; repeatable
+        (default: 8.8.8.8, 9.9.9.9)
+  -dns-ipv4-only
+        resolve only IPv4 addresses
+  -enable-doh
+        enable DNS-over-HTTPS as an additional resolver (default true)
+  -doh-url string
+        DoH endpoint URL (default "https://cloudflare-dns.com/dns-query")
+  -doh-bootstrap-ip string
+        IP to dial for the DoH endpoint, bypassing the system resolver (default "1.1.1.1")
+  -pattern value
+        bypass DPI only on packets matching this regex pattern; can be given multiple times
   -window-size value
         chunk size, in number of bytes, for fragmented client hello,
         try lower values if the default value doesn't bypass the DPI;
         when not given, the client hello packet will be sent in two parts:
-        fragmentation for the first data packet and the rest
+        fragmentation for the first data packet and the rest (default 5)
+  -timeout value
+        timeout in milliseconds; no timeout when not given
+  -system-proxy
+        enable system-wide proxy (macOS only; ignored elsewhere)
+  -silent
+        do not show the banner and server information at start up
+  -debug
+        enable debug output
+  -v    print spoofdpi's version; this may contain some other relevant information
 ```
+
+For ISP-specific tuning, see [`TR_DPI.md`](TR_DPI.md).
 
 > If you are using any vpn extensions such as Hotspot Shield in Chrome browser,
   go to Settings > Extensions, and disable them.

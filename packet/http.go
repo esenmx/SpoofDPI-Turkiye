@@ -97,9 +97,17 @@ func (p *HttpRequest) IsConnectMethod() bool {
 func (p *HttpRequest) Tidy() {
 	s := string(p.raw)
 
-	parts := strings.Split(s, "\r\n\r\n")
-	meta := strings.Split(parts[0], "\r\n")
-
+	headersEnd := strings.Index(s, "\r\n\r\n")
+	var head, body string
+	if headersEnd < 0 {
+		head, body = s, ""
+	} else {
+		head, body = s[:headersEnd], s[headersEnd+4:]
+	}
+	meta := strings.Split(head, "\r\n")
+	if len(meta) == 0 {
+		meta = []string{""}
+	}
 	meta[0] = p.method + " " + p.path + " " + p.version
 
 	var buf bytes.Buffer
@@ -114,7 +122,7 @@ func (p *HttpRequest) Tidy() {
 		buf.Write(crLF)
 	}
 	buf.Write(crLF)
-	buf.WriteString(parts[1])
+	buf.WriteString(body)
 
 	p.raw = buf.Bytes()
 }
