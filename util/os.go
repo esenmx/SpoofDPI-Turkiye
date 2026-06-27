@@ -63,10 +63,9 @@ func getProxyTypes() []string {
 }
 
 func setProxy(proxyTypes []string, network, domain string, port uint16) error {
-	args := []string{"", network, domain, strconv.FormatUint(uint64(port), 10)}
-
+	portStr := strconv.FormatUint(uint64(port), 10)
 	for _, proxyType := range proxyTypes {
-		args[0] = "-set" + proxyType
+		args := []string{"-set" + proxyType, network, domain, portStr}
 		if err := networkSetup(args); err != nil {
 			return fmt.Errorf("setting %s: %w", proxyType, err)
 		}
@@ -75,10 +74,8 @@ func setProxy(proxyTypes []string, network, domain string, port uint16) error {
 }
 
 func unsetProxy(proxyTypes []string, network string) error {
-	args := []string{"", network, "off"}
-
 	for _, proxyType := range proxyTypes {
-		args[0] = "-set" + proxyType + "state"
+		args := []string{"-set" + proxyType + "state", network, "off"}
 		if err := networkSetup(args); err != nil {
 			return fmt.Errorf("unsetting %s: %w", proxyType, err)
 		}
