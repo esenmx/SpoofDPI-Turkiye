@@ -88,6 +88,26 @@ google-chrome --proxy-server="http://127.0.0.1:8080"
  SpoofDPI'ın bunu atlamak için yaptığı şey, bir isteğin ilk 1 baytını sunucuya göndermektir,
  ve sonra geri kalanını gönder.
 
+### Akış Şeması (Mimari)
+
+```mermaid
+graph TD
+    İstemci[İstemci Tarayıcı]
+    Proxy[Proxy Dinleyicisi: Port 8080]
+    DnsResolver[DNS Çözümleyici Zinciri]
+    HttpHandler[HTTP İşleyici]
+    HttpsHandler[HTTPS İşleyici]
+    Hedef[Hedef Web Sitesi]
+
+    İstemci -->|TCP Bağlantısı| Proxy
+    Proxy -->|Alan Adı Çözümleme| DnsResolver
+    Proxy -->|Düz Metin HTTP| HttpHandler
+    Proxy -->|HTTPS CONNECT Tüneli| HttpsHandler
+    HttpHandler -->|Doğrudan Bağlantı| Hedef
+    HttpsHandler -->|Parçalanmış ClientHello| Hedef
+```
+
 ## Benzer Projeler
 
 [GoodbyeDPI-Turkey](https://github.com/cagritaskn/GoodbyeDPI-Turkey) @cagritaskn (Windows)
+
