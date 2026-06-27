@@ -172,4 +172,3 @@ func (p *HttpRequest) IsValidMethod() bool {
 func (p *HttpRequest) IsConnectMethod() bool {
 	return p.Method() == "CONNECT"
 }
-
