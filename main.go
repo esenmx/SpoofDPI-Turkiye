@@ -31,8 +31,8 @@ func run() int {
 		return 2
 	}
 
-	log.InitLogger(config)
-	ctx, cancel := context.WithCancel(util.GetCtxWithScope(context.Background(), "MAIN"))
+	log.InitLogger(config.Debug)
+	ctx, cancel := context.WithCancel(log.GetCtxWithScope(context.Background(), "MAIN"))
 	defer cancel()
 	logger := log.GetCtxLogger(ctx)
 

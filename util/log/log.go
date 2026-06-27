@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/esenmx/SpoofDPI-Turkiye/util"
 	"github.com/rs/zerolog"
 )
 
@@ -21,7 +20,7 @@ func GetCtxLogger(ctx context.Context) zerolog.Logger {
 	return logger.With().Ctx(ctx).Logger()
 }
 
-func InitLogger(cfg *util.Config) {
+func InitLogger(debug bool) {
 	partsOrder := []string{
 		zerolog.LevelFieldName,
 		zerolog.TimestampFieldName,
@@ -43,7 +42,7 @@ func InitLogger(cfg *util.Config) {
 	}
 
 	logger = zerolog.New(consoleWriter).Hook(ctxHook{})
-	if cfg.Debug {
+	if debug {
 		logger = logger.Level(zerolog.DebugLevel)
 	} else {
 		logger = logger.Level(zerolog.InfoLevel)
@@ -62,10 +61,10 @@ func formatFieldValue[T any](vs map[string]any, format string, field string) {
 type ctxHook struct{}
 
 func (h ctxHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
-	if scope, ok := util.GetScopeFromCtx(e.GetCtx()); ok {
+	if scope, ok := GetScopeFromCtx(e.GetCtx()); ok {
 		e.Str(scopeFieldName, scope)
 	}
-	if traceId, ok := util.GetTraceIdFromCtx(e.GetCtx()); ok {
+	if traceId, ok := GetTraceIdFromCtx(e.GetCtx()); ok {
 		e.Str(traceIdFieldName, traceId)
 	}
 }

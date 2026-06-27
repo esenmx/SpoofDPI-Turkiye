@@ -79,7 +79,7 @@ func NewDns(config *util.Config) *Dns {
 }
 
 func (d *Dns) ResolveHost(ctx context.Context, host string, _enableDoh bool, useSystemDns bool) (string, error) {
-	ctx = util.GetCtxWithScope(ctx, scopeDNS)
+	ctx = log.GetCtxWithScope(ctx, scopeDNS)
 	logger := log.GetCtxLogger(ctx)
 
 	if ip, err := parseIpAddr(host); err == nil {
