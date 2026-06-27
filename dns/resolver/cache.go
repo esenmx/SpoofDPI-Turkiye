@@ -5,7 +5,6 @@ import (
 	"net"
 	"sync"
 	"time"
-	"unsafe"
 )
 
 // Cache wraps a Resolver with a small TTL+negative cache. It coalesces
@@ -60,10 +59,7 @@ func cacheKey(host string, qTypes []uint16) string {
 		b[len(host)+2*i] = byte(q >> 8)
 		b[len(host)+2*i+1] = byte(q)
 	}
-	// b is freshly allocated and not referenced after the conversion, so a
-	// zero-copy unsafe.String is safe here and avoids the runtime.stringbytes
-	// copy that string(b) would do on every lookup.
-	return unsafe.String(unsafe.SliceData(b), len(b))
+	return string(b)
 }
 
 func (c *Cache) Resolve(ctx context.Context, host string, qTypes []uint16) ([]net.IPAddr, error) {
@@ -95,7 +91,8 @@ func (c *Cache) Resolve(ctx context.Context, host string, qTypes []uint16) ([]ne
 	c.pending[key] = p
 	c.mu.Unlock()
 
-	addrs, err := c.inner.Resolve(ctx, host, qTypes)
+	lookupCtx := context.WithoutCancel(ctx)
+	addrs, err := c.inner.Resolve(lookupCtx, host, qTypes)
 
 	c.mu.Lock()
 	p.addrs, p.err = addrs, err
