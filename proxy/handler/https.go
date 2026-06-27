@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/esenmx/SpoofDPI-Turkiye/packet"
-	"github.com/esenmx/SpoofDPI-Turkiye/util"
 	"github.com/esenmx/SpoofDPI-Turkiye/util/log"
 )
 
@@ -52,8 +51,8 @@ func NewHttpsHandler(timeout int, windowSize int, allowedPatterns []*regexp.Rege
 	}
 }
 
-func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, initPkt *packet.HttpRequest, ip string) {
-	ctx = util.GetCtxWithScope(ctx, h.protocol)
+func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, lReader io.Reader, initPkt *packet.HttpRequest, ip string) {
+	ctx = log.GetCtxWithScope(ctx, h.protocol)
 	logger := log.GetCtxLogger(ctx)
 
 	port := 443
@@ -83,7 +82,7 @@ func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, initPkt *p
 		return
 	}
 
-	m, err := packet.ReadTLSMessage(lConn)
+	m, err := packet.ReadTLSMessage(lReader)
 	if err != nil || !m.IsClientHello() {
 		logger.Debug().Msgf("error reading client hello from %s: %v", lConn.RemoteAddr(), err)
 		lConn.Close()
@@ -112,7 +111,7 @@ func (h *HttpsHandler) Serve(ctx context.Context, lConn *net.TCPConn, initPkt *p
 		}
 	}
 
-	pipe(ctx, lConn, rConn, h.bufferSize, h.timeout, initPkt.Domain())
+	pipe(ctx, lReader, lConn, rConn, h.bufferSize, h.timeout, initPkt.Domain())
 }
 
 // splitInChunks returns an iterator over fragments of raw. With size > 0 it
@@ -154,17 +153,17 @@ func writeChunks(conn *net.TCPConn, chunks iter.Seq[[]byte]) (int, error) {
 // pipe runs both directions of the bidirectional copy and tears the
 // connection down with TCP half-close so an EOF in one direction does not
 // truncate an in-flight response in the other.
-func pipe(ctx context.Context, lConn, rConn *net.TCPConn, bufSize, timeoutMs int, domain string) {
+func pipe(ctx context.Context, lReader io.Reader, lConn, rConn *net.TCPConn, bufSize, timeoutMs int, domain string) {
 	logger := log.GetCtxLogger(ctx)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		copyWithTimeout(ctx, lConn, rConn, bufSize, timeoutMs)
+		copyWithTimeout(ctx, lReader, lConn, rConn, bufSize, timeoutMs)
 		_ = rConn.CloseWrite()
 		_ = lConn.CloseRead()
 	})
 	wg.Go(func() {
-		copyWithTimeout(ctx, rConn, lConn, bufSize, timeoutMs)
+		copyWithTimeout(ctx, rConn, rConn, lConn, bufSize, timeoutMs)
 		_ = lConn.CloseWrite()
 		_ = rConn.CloseRead()
 	})
@@ -175,7 +174,7 @@ func pipe(ctx context.Context, lConn, rConn *net.TCPConn, bufSize, timeoutMs int
 	logger.Debug().Msgf("closed proxy connection: %s", domain)
 }
 
-func copyWithTimeout(ctx context.Context, from, to *net.TCPConn, bufSize, timeoutMs int) {
+func copyWithTimeout(ctx context.Context, from io.Reader, fromConn *net.TCPConn, to *net.TCPConn, bufSize, timeoutMs int) {
 	logger := log.GetCtxLogger(ctx)
 
 	var buf []byte
@@ -191,7 +190,7 @@ func copyWithTimeout(ctx context.Context, from, to *net.TCPConn, bufSize, timeou
 	timeout := time.Duration(timeoutMs) * time.Millisecond
 	for {
 		if timeoutMs > 0 {
-			if err := from.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+			if err := fromConn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 				logger.Debug().Msgf("setReadDeadline: %s", err)
 				return
 			}

@@ -1,8 +1,10 @@
 package proxy
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"regexp"
 	"runtime/debug"
@@ -28,7 +30,7 @@ type Proxy struct {
 }
 
 type Handler interface {
-	Serve(ctx context.Context, lConn *net.TCPConn, pkt *packet.HttpRequest, ip string)
+	Serve(ctx context.Context, lConn *net.TCPConn, lReader io.Reader, pkt *packet.HttpRequest, ip string)
 }
 
 func New(config *util.Config) *Proxy {
@@ -43,7 +45,7 @@ func New(config *util.Config) *Proxy {
 }
 
 func (pxy *Proxy) Start(ctx context.Context) error {
-	ctx = util.GetCtxWithScope(ctx, scopeProxy)
+	ctx = log.GetCtxWithScope(ctx, scopeProxy)
 	logger := log.GetCtxLogger(ctx)
 
 	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(pxy.addr), Port: pxy.port})
@@ -96,7 +98,7 @@ func (pxy *Proxy) Start(ctx context.Context) error {
 }
 
 func (pxy *Proxy) handle(ctx context.Context, conn net.Conn) {
-	ctx = util.GetCtxWithTraceId(ctx)
+	ctx = log.GetCtxWithTraceId(ctx)
 	logger := log.GetCtxLogger(ctx)
 
 	defer func() {
@@ -106,7 +108,8 @@ func (pxy *Proxy) handle(ctx context.Context, conn net.Conn) {
 		}
 	}()
 
-	pkt, err := packet.ReadHttpRequest(conn)
+	br := bufio.NewReader(conn)
+	pkt, err := packet.ReadHttpRequest(br)
 	if err != nil {
 		logger.Debug().Msgf("error parsing request: %s", err)
 		_ = conn.Close()
@@ -152,7 +155,7 @@ func (pxy *Proxy) handle(ctx context.Context, conn net.Conn) {
 	} else {
 		h = handler.NewHttpHandler(pxy.timeout)
 	}
-	h.Serve(ctx, tcpConn, pkt, ip)
+	h.Serve(ctx, tcpConn, br, pkt, ip)
 }
 
 func (pxy *Proxy) patternMatches(b []byte) bool {

@@ -3,6 +3,7 @@ package packet
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -55,88 +56,35 @@ type HttpRequest struct {
 }
 
 func ReadHttpRequest(rdr io.Reader) (*HttpRequest, error) {
-	p, err := parse(rdr)
-	if err != nil {
-		return nil, err
+	br, ok := rdr.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReader(rdr)
 	}
 
-	return p, nil
-}
-
-func (p *HttpRequest) Raw() []byte {
-	return p.raw
-}
-func (p *HttpRequest) Method() string {
-	return p.method
-}
-
-func (p *HttpRequest) Domain() string {
-	return p.domain
-}
-
-func (p *HttpRequest) Port() string {
-	return p.port
-}
-
-func (p *HttpRequest) Version() string {
-	return p.version
-}
-
-func (p *HttpRequest) IsValidMethod() bool {
-	if _, exists := validMethod[p.Method()]; exists {
-		return true
-	}
-
-	return false
-}
-
-func (p *HttpRequest) IsConnectMethod() bool {
-	return p.Method() == "CONNECT"
-}
-
-func (p *HttpRequest) Tidy() {
-	s := string(p.raw)
-
-	headersEnd := strings.Index(s, "\r\n\r\n")
-	var head, body string
-	if headersEnd < 0 {
-		head, body = s, ""
-	} else {
-		head, body = s[:headersEnd], s[headersEnd+4:]
-	}
-	meta := strings.Split(head, "\r\n")
-	if len(meta) == 0 {
-		meta = []string{""}
-	}
-	meta[0] = p.method + " " + p.path + " " + p.version
-
-	var buf bytes.Buffer
-	buf.Grow(len(p.raw))
-
-	crLF := []byte{0xD, 0xA}
-	for _, m := range meta {
-		if strings.HasPrefix(m, "Proxy-Connection") {
-			continue
+	var headerBuf bytes.Buffer
+	maxHeaderSize := 64 * 1024 // 64 KB limit
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return nil, err
 		}
-		buf.WriteString(m)
-		buf.Write(crLF)
+		if headerBuf.Len()+len(line) > maxHeaderSize {
+			return nil, errors.New("headers too large")
+		}
+		headerBuf.WriteString(line)
+		if line == "\r\n" || line == "\n" {
+			break
+		}
 	}
-	buf.Write(crLF)
-	buf.WriteString(body)
 
-	p.raw = buf.Bytes()
-}
-
-func parse(rdr io.Reader) (*HttpRequest, error) {
-	sb := strings.Builder{}
-	tee := io.TeeReader(rdr, &sb)
-	request, err := http.ReadRequest(bufio.NewReader(tee))
+	rawHeaders := headerBuf.Bytes()
+	request, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(rawHeaders)))
 	if err != nil {
 		return nil, err
 	}
 
 	p := &HttpRequest{}
-	p.raw = []byte(sb.String())
+	p.raw = rawHeaders
 
 	p.domain, p.port, err = net.SplitHostPort(request.Host)
 	if err != nil {
@@ -159,6 +107,69 @@ func parse(rdr io.Reader) (*HttpRequest, error) {
 		p.path = "/"
 	}
 
-	request.Body.Close()
 	return p, nil
 }
+
+func (p *HttpRequest) Tidy() {
+	s := string(p.raw)
+
+	headersEnd := strings.Index(s, "\r\n\r\n")
+	var head string
+	if headersEnd < 0 {
+		head = s
+	} else {
+		head = s[:headersEnd]
+	}
+	meta := strings.Split(head, "\r\n")
+	if len(meta) == 0 {
+		meta = []string{""}
+	}
+	meta[0] = p.method + " " + p.path + " " + p.version
+
+	var buf bytes.Buffer
+	buf.Grow(len(p.raw))
+
+	crLF := []byte{0xD, 0xA}
+	for _, m := range meta {
+		if strings.HasPrefix(m, "Proxy-Connection") {
+			continue
+		}
+		buf.WriteString(m)
+		buf.Write(crLF)
+	}
+	buf.Write(crLF)
+
+	p.raw = buf.Bytes()
+}
+
+func (p *HttpRequest) Raw() []byte {
+	return p.raw
+}
+
+func (p *HttpRequest) Method() string {
+	return p.method
+}
+
+func (p *HttpRequest) Domain() string {
+	return p.domain
+}
+
+func (p *HttpRequest) Port() string {
+	return p.port
+}
+
+func (p *HttpRequest) Version() string {
+	return p.version
+}
+
+func (p *HttpRequest) IsValidMethod() bool {
+	if _, exists := validMethod[p.Method()]; exists {
+		return true
+	}
+	return false
+}
+
+func (p *HttpRequest) IsConnectMethod() bool {
+	return p.Method() == "CONNECT"
+}
+

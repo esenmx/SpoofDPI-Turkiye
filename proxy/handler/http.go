@@ -2,11 +2,11 @@ package handler
 
 import (
 	"context"
+	"io"
 	"net"
 	"strconv"
 
 	"github.com/esenmx/SpoofDPI-Turkiye/packet"
-	"github.com/esenmx/SpoofDPI-Turkiye/util"
 	"github.com/esenmx/SpoofDPI-Turkiye/util/log"
 )
 
@@ -24,8 +24,8 @@ func NewHttpHandler(timeout int) *HttpHandler {
 	}
 }
 
-func (h *HttpHandler) Serve(ctx context.Context, lConn *net.TCPConn, pkt *packet.HttpRequest, ip string) {
-	ctx = util.GetCtxWithScope(ctx, h.protocol)
+func (h *HttpHandler) Serve(ctx context.Context, lConn *net.TCPConn, lReader io.Reader, pkt *packet.HttpRequest, ip string) {
+	ctx = log.GetCtxWithScope(ctx, h.protocol)
 	logger := log.GetCtxLogger(ctx)
 
 	port := 80
@@ -55,5 +55,5 @@ func (h *HttpHandler) Serve(ctx context.Context, lConn *net.TCPConn, pkt *packet
 		return
 	}
 
-	pipe(ctx, lConn, rConn, h.bufferSize, h.timeout, pkt.Domain())
+	pipe(ctx, lReader, lConn, rConn, h.bufferSize, h.timeout, pkt.Domain())
 }
