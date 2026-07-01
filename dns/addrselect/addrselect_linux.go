@@ -10,8 +10,13 @@ import (
 	"strings"
 )
 
-func getDeprecatedAddrs() map[netip.Addr]bool {
-	m := make(map[netip.Addr]bool)
+type addrFlags struct {
+	IsDeprecated bool
+	IsHome       bool
+}
+
+func getAddrFlags() map[netip.Addr]addrFlags {
+	m := make(map[netip.Addr]addrFlags)
 	f, err := os.Open("/proc/net/if_inet6")
 	if err != nil {
 		return nil
@@ -32,11 +37,17 @@ func getDeprecatedAddrs() map[netip.Addr]bool {
 			continue
 		}
 
-		if (flags & 0x20) != 0 {
+		isDeprecated := (flags & 0x20) != 0
+		isHome := (flags & 0x10) != 0
+
+		if isDeprecated || isHome {
 			// Parse IP (index 0)
 			ip, err := parseIPv6Hex(fields[0])
 			if err == nil {
-				m[ip] = true
+				m[ip] = addrFlags{
+					IsDeprecated: isDeprecated,
+					IsHome:       isHome,
+				}
 			}
 		}
 	}

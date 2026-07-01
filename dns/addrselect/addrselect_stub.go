@@ -4,6 +4,11 @@ package addrselect
 
 import "net/netip"
 
-func getDeprecatedAddrs() map[netip.Addr]bool {
+type addrFlags struct {
+	IsDeprecated bool
+	IsHome       bool
+}
+
+func getAddrFlags() map[netip.Addr]addrFlags {
 	return nil
 }
