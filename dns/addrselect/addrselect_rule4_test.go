@@ -19,14 +19,14 @@ func TestRule4(t *testing.T) {
 			if a.IP.Equal(da1.IP) {
 				// Home address
 				res[i] = srcInfo{
-					Addr:     netip.MustParseAddr("2001:db8::3"),
-					IsHome:   true,
+					Addr:   netip.MustParseAddr("2001:db8::3"),
+					IsHome: true,
 				}
 			} else if a.IP.Equal(da2.IP) {
 				// Not a home address
 				res[i] = srcInfo{
-					Addr:     netip.MustParseAddr("2001:db8::4"),
-					IsHome:   false,
+					Addr:   netip.MustParseAddr("2001:db8::4"),
+					IsHome: false,
 				}
 			}
 		}
